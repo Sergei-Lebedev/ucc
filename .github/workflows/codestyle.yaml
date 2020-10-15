@@ -1,0 +1,53 @@
+name: Codestyle
+
+on: [pull_request]
+
+jobs:
+  check-commit-title:
+    runs-on: ubuntu-latest
+    name: Check commit title
+    steps:
+    - uses: actions/checkout@v1
+    - name: Check commit title
+      run: |
+        set -eE
+        range="origin/$GITHUB_BASE_REF..origin/$GITHUB_HEAD_REF"
+        check_title() {
+          msg=$1
+          if [ ${#msg} -gt 50 ]
+          then
+            if ! echo $msg | grep -qP '^Merge'
+            then
+              echo "Commit title is too long: ${#msg}"
+              return 1
+            fi
+          fi
+          if ! echo $msg | grep -qP '^Merge |^((CORE|UTIL|TEST|API|DOCS)|(CL/|TL/|UCX|UCG))+: \w'
+          then
+            echo "Wrong header"
+            return 1
+          fi
+          if [ "${msg: -1}" = "." ]
+          then
+            echo "Dot at the end of title"
+            return 1
+          fi
+          return 0
+        }
+
+        ok=1
+        for sha1 in `git log $range --format="%h"`
+        do
+          title=`git log -1 --format="%s" $sha1`
+          if check_title "$title"
+          then
+            echo "Good commit title: '$title'"
+          else
+            echo "Bad commit title: '$title'"
+            ok=0
+          fi
+        done
+        if [ $ok -ne 1 ]
+        then
+          exit 1
+        fi
