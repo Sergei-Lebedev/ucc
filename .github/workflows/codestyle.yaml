@@ -7,11 +7,15 @@ jobs:
     runs-on: ubuntu-latest
     name: Check commit title
     steps:
-    - uses: actions/checkout@v1
+    - name: Checking out repository
+      uses: actions/checkout@v2
+      with:
+        ref: ${{ github.event.pull_request.head.sha }}
+        fetch-depth: 0
     - name: Check commit title
       run: |
         set -eE
-        range="origin/$GITHUB_BASE_REF..origin/$GITHUB_HEAD_REF"
+        range="remotes/origin/$GITHUB_BASE_REF..HEAD"
         check_title() {
           msg=$1
           if [ ${#msg} -gt 50 ]
@@ -22,7 +26,7 @@ jobs:
               return 1
             fi
           fi
-          if ! echo $msg | grep -qP '^Merge |^((CORE|UTIL|TEST|API|DOCS)|(CL/|TL/|UCX|UCG))+: \w'
+          if ! echo $msg | grep -qP '^Merge |^((CORE|UTIL|TEST|API|DOCS|TOOLS)|(CL/|TL/|UCX|UCG))+: \w'
           then
             echo "Wrong header"
             return 1
@@ -34,7 +38,6 @@ jobs:
           fi
           return 0
         }
-
         ok=1
         for sha1 in `git log $range --format="%h"`
         do
@@ -46,6 +49,7 @@ jobs:
             echo "Bad commit title: '$title'"
             ok=0
           fi
+          echo "--------------------------------------------------"
         done
         if [ $ok -ne 1 ]
         then
