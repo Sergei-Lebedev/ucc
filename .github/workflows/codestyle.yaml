@@ -35,6 +35,8 @@ jobs:
           return 0
         }
 
+
+
         ok=1
         for sha1 in `git log $range --format="%h"`
         do
