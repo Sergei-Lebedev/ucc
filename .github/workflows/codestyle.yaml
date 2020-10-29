@@ -12,7 +12,8 @@ jobs:
     - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y --no-install-recommends clang-format
+        sudo apt-get install -y --no-install-recommends wget lsb-core software-properties-common
+        sudo bash -c "$(wget -O - https://apt.llvm.org/llvm.sh)"
         sudo wget -O /usr/bin/git-clang-format $GIT_CF
         sudo chmod +x /usr/bin/git-clang-format
     - name: Checking out repository
@@ -68,7 +69,7 @@ jobs:
         set -eE
         echo "Commit ${{ github.event.pull_request.base.sha }}"
         diff=`git clang-format --style=file --diff ${{ github.event.pull_request.base.sha }}`
-        if [ "$diff" = "no modified files to format" ]
+        if [ "$diff" = "no modified files to format" ] || [ "$diff" = "clang-format did not modify any files" ]
         then
           echo "Format check PASS"
         else
