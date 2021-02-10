@@ -12,7 +12,7 @@ jobs:
     - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y --no-install-recommends wget lsb-core software-properties-common
+        sudo apt-get install -y --no-install-recommends wget lsb-core software-properties-common curl
         sudo bash -c "$(wget -O - https://apt.llvm.org/llvm.sh)"
         sudo wget -O /usr/bin/git-clang-format $GIT_CF
         sudo chmod +x /usr/bin/git-clang-format
@@ -65,14 +65,18 @@ jobs:
           exit 1
         fi
     - name: Check code format
+      env:
+        PR_NUMBER: ${{ github.event.pull_request.number }}
       run: |
         set -eE
         echo "Commit ${{ github.event.pull_request.base.sha }}"
         diff=`git clang-format --style=file --diff ${{ github.event.pull_request.base.sha }}`
         if [ "$diff" = "no modified files to format" ] || [ "$diff" = "clang-format did not modify any files" ]
         then
-          echo "Format check PASS"
+          msg="Format check PASS"
         else
-          echo "Please check code format:"
+          msg="Please check code format:"
           echo "$diff"
         fi
+        curl -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" -X POST -d '{"body": "$msg"}' \
+        https://api.github.com/repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments
