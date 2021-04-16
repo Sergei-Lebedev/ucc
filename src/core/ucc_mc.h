@@ -51,6 +51,24 @@ ucc_status_t ucc_mc_reduce_multi(void *src1, void *src2, void *dst,
                                  ucc_datatype_t dtype, ucc_reduction_op_t op,
                                  ucc_memory_type_t mem_type);
 
+
+ucc_status_t ucc_ee_executor_create_post(const ucc_ee_executor_params_t *params,
+                                         ucc_ee_executor_t **executor);
+ucc_status_t ucc_ee_executor_create_test(ucc_ee_executor_t *executor);
+
+ucc_status_t ucc_ee_executor_destroy(ucc_ee_executor_t *executor);
+
+ucc_status_t ucc_ee_executor_task_post(ucc_ee_executor_task_args_t *task_args,
+                                          ucc_ee_executor_t *executor);
+ucc_status_t ucc_ee_executor_task_test(ucc_ee_executor_t *executor);
+
+// ucc_status_t ucc_mc_ee_executor_task_init(ucc_mc_ee_executor_t* eee,
+//                                           ucc_mc_ee_executor_task_args_t args,
+//                                           void **task);
+// ucc_status_t ucc_mc_ee_executor_task_post(void *task);
+// ucc_status_t ucc_mc_ee_executor_task_query(void *task);
+// ucc_status_t ucc_mc_ee_executor_task_finalize(void *task);
+
 static inline ucc_status_t ucc_dt_reduce(const void *src1, const void *src2,
                                          void *dst, size_t count,
                                          ucc_datatype_t dt,

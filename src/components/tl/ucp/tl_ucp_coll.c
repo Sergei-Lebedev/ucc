@@ -61,7 +61,8 @@ ucc_tl_ucp_triggered_coll_complete(ucc_coll_task_t *parent_task, //NOLINT
 
     tl_info(task->team->super.super.context->lib,
         "triggered collective complete. task:%p", coll_task);
-    return ucc_mc_ee_task_end(coll_task->ee_task, coll_task->ee->ee_type);
+    // return ucc_mc_ee_task_end(coll_task->ee_task, coll_task->ee->ee_type);
+    return ucc_ee_executor_destroy((ucc_ee_executor_t*)coll_task->ee_task);
 }
 
 static ucc_status_t
@@ -121,8 +122,13 @@ static ucc_status_t ucc_tl_ucp_ee_wait_for_event_trigger(ucc_coll_task_t *coll_t
     }
 
     if (task->super.ee_task == NULL) {
-        status = ucc_mc_ee_task_post(task->super.ee->ee_context,
-                                     task->super.ee->ee_type, &task->super.ee_task);
+        // status = ucc_mc_ee_task_post(task->super.ee->ee_context,
+        //                              task->super.ee->ee_type, &task->super.ee_task);
+        ucc_ee_executor_params_t params;
+        params.ee_type = task->super.ee->ee_type;
+        params.ee_context = task->super.ee->ee_context;
+        status = ucc_ee_executor_create_post(&params,
+                                             (ucc_ee_executor_t**)&task->super.ee_task);
         if (status != UCC_OK) {
             tl_error(task->team->super.super.context->lib, "error in ee task post");
             task->super.super.status = status;
@@ -143,8 +149,10 @@ static ucc_status_t ucc_tl_ucp_ee_wait_for_event_trigger(ucc_coll_task_t *coll_t
         ucc_ee_set_event_internal(coll_task->ee, post_event, &coll_task->ee->event_out_queue);
     }
 
+    // if (task->super.ee_task == NULL ||
+    //     (UCC_OK == ucc_mc_ee_task_query(task->super.ee_task, task->super.ee->ee_type)))
     if (task->super.ee_task == NULL ||
-        (UCC_OK == ucc_mc_ee_task_query(task->super.ee_task, task->super.ee->ee_type)))
+        (UCC_OK == ucc_ee_executor_create_test((ucc_ee_executor_t*)task->super.ee_task)))
     {
         task->super.super.status = UCC_OK;
     }

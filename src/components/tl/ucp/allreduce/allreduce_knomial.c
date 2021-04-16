@@ -95,12 +95,23 @@ PHASE_EXTRA:
         if (KN_NODE_EXTRA == node_type) {
             goto completion;
         } else {
-            if (UCC_OK != (status = ucc_dt_reduce(sbuf, scratch, rbuf,
-                                                  count, dt, mem_type, &task->args))) {
-                tl_error(UCC_TL_TEAM_LIB(task->team),
-                         "failed to perform dt reduction");
-                task->super.super.status = status;
-                return status;
+            if (task->super.ee_task) {
+                ucc_ee_executor_task_args_t eee_args;
+                eee_args.task_type = UCC_MC_EE_EXECUTOR_TASK_TYPE_REDUCE;
+                eee_args.src1.buffer = sbuf;
+                eee_args.src2.buffer = scratch;
+                eee_args.dst.buffer  = rbuf;
+                eee_args.dst.count = count;
+                eee_args.dst.datatype = dt;
+                ucc_ee_executor_task_post(&eee_args, (ucc_ee_executor_t*)task->super.ee_task);
+            } else {
+                if (UCC_OK != (status = ucc_dt_reduce(sbuf, scratch, rbuf,
+                                                    count, dt, mem_type, &task->args))) {
+                    tl_error(UCC_TL_TEAM_LIB(task->team),
+                            "failed to perform dt reduction");
+                    task->super.super.status = status;
+                    return status;
+                }
             }
         }
     }
@@ -182,7 +193,7 @@ completion:
     ucc_assert(UCC_TL_UCP_TASK_P2P_COMPLETE(task));
     task->super.super.status = UCC_OK;
 out:
-    ucc_mc_free(task->allreduce_kn.scratch, task->args.src.info.mem_type);
+//    ucc_mc_free(task->allreduce_kn.scratch, task->args.src.info.mem_type);
     return task->super.super.status;
 }
 
