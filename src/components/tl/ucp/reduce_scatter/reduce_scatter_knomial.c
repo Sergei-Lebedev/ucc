@@ -173,6 +173,7 @@ UCC_KN_PHASE_EXTRA:
     }
 UCC_KN_PHASE_PROXY: /* unused label */
 out:
+    UCC_PROFILE_REQUEST_EVENT(coll_task, "ucp_reduce_scatter_kn_done", 0);
     task->super.super.status = UCC_OK;
     return task->super.super.status;
 }
@@ -187,7 +188,7 @@ ucc_status_t ucc_tl_ucp_reduce_scatter_knomial_start(ucc_coll_task_t *coll_task)
     task->reduce_scatter_kn.phase   = UCC_KN_PHASE_INIT;
     ucc_tl_ucp_task_reset(task);
     ucc_knomial_pattern_init(team->size, team->rank, task->reduce_scatter_kn.p.radix, &task->reduce_scatter_kn.p);
-               node_type = task->reduce_scatter_kn.p.node_type;    
+               node_type = task->reduce_scatter_kn.p.node_type;
     if (!(UCC_IS_INPLACE(task->args) || (KN_NODE_PROXY == node_type))) {
         task->reduce_scatter_kn.scratch = task->args.dst.info.buffer;
     }

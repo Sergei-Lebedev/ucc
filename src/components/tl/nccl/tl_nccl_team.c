@@ -94,13 +94,22 @@ free_unique_id:
 UCC_CLASS_CLEANUP_FUNC(ucc_tl_nccl_team_t)
 {
     int i;
+    ucc_tl_nccl_context_t *nccl_ctx  = ucc_derived_of(self->super.super.context,
+                                                      ucc_tl_nccl_context_t);
+    ucc_tl_nccl_lib_t *nccl_lib = ucc_derived_of(nccl_ctx->super.super.lib,
+                                                 ucc_tl_nccl_lib_t);
+
 
     tl_info(self->super.super.context->lib, "finalizing tl team: %p", self);
     if (self->nccl_comm) {
-        ncclCommDestroy(self->nccl_comm);
+        if (nccl_lib->cfg.pp_allreduce == 0) {
+            ncclCommDestroy(self->nccl_comm);
+        }
         cudaStreamDestroy(self->stream);
         for (i = 0; i < NUM_NCCL_COMMS; i++) {
-            ncclCommDestroy(self->nccl_comms[i]);
+            if (nccl_lib->cfg.pp_allreduce != 0) {
+                ncclCommDestroy(self->nccl_comms[i]);
+            }
             cudaStreamDestroy(self->streams[i]);
         }
 
@@ -122,6 +131,11 @@ ucc_status_t ucc_tl_nccl_team_create_test(ucc_base_team_t *tl_team)
     ucc_status_t status;
     ncclResult_t nccl_status;
     ncclUniqueId errorid;
+    ucc_tl_nccl_context_t *nccl_ctx  = ucc_derived_of(tl_team->context,
+                                                      ucc_tl_nccl_context_t);
+    ucc_tl_nccl_lib_t *nccl_lib = ucc_derived_of(nccl_ctx->super.super.lib,
+                                                 ucc_tl_nccl_lib_t);
+
     int i;
 
     status = team->oob.req_test(team->oob_req);
@@ -145,6 +159,7 @@ ucc_status_t ucc_tl_nccl_team_create_test(ucc_base_team_t *tl_team)
         goto free_unique_id;
     }
 
+
     CUDACHECK_GOTO(cudaStreamCreateWithFlags(&team->stream,
                    cudaStreamNonBlocking), free_unique_id, status,
                    tl_team->context->lib);
@@ -153,43 +168,46 @@ ucc_status_t ucc_tl_nccl_team_create_test(ucc_base_team_t *tl_team)
                        cudaStreamNonBlocking), free_unique_id, status,
                        tl_team->context->lib);
     }
-    nccl_status = ncclCommInitRank(&team->nccl_comm, team->size,
-                                   team->unique_id[0], team->rank);
-    if (nccl_status != ncclSuccess) {
-        tl_info(tl_team->context->lib, "NCCL error %d %s",
-                nccl_status, ncclGetErrorString(nccl_status));
-        status = UCC_ERR_NO_MESSAGE;
-        goto free_stream;
-    }
 
-    nccl_status = ncclCommInitRank(&team->nccl_comms[0], team->local_size,
-                                    team->unique_id[4*team->nodeid+1],
-                                    team->local_rank);
-    if (nccl_status != ncclSuccess) {
-        tl_info(tl_team->context->lib, "NCCL error %d %s",
-                nccl_status, ncclGetErrorString(nccl_status));
-        status = UCC_ERR_NO_MESSAGE;
-        goto free_stream;
-    }
+    if (nccl_lib->cfg.pp_allreduce == 0) {
+        nccl_status = ncclCommInitRank(&team->nccl_comm, team->size,
+                                    team->unique_id[0], team->rank);
+        if (nccl_status != ncclSuccess) {
+            tl_info(tl_team->context->lib, "NCCL error %d %s",
+                    nccl_status, ncclGetErrorString(nccl_status));
+            status = UCC_ERR_NO_MESSAGE;
+            goto free_stream;
+        }
+    } else {
+        nccl_status = ncclCommInitRank(&team->nccl_comms[0], team->local_size,
+                                        team->unique_id[4*team->nodeid+1],
+                                        team->local_rank);
+        if (nccl_status != ncclSuccess) {
+            tl_info(tl_team->context->lib, "NCCL error %d %s",
+                    nccl_status, ncclGetErrorString(nccl_status));
+            status = UCC_ERR_NO_MESSAGE;
+            goto free_stream;
+        }
 
-    nccl_status = ncclCommInitRank(&team->nccl_comms[1], team->num_nodes,
-                                    team->unique_id[4*team->num_nodes*team->local_rank + 2],
-                                    team->nodeid);
-    if (nccl_status != ncclSuccess) {
-        tl_info(tl_team->context->lib, "NCCL error %d %s",
-                nccl_status, ncclGetErrorString(nccl_status));
-        status = UCC_ERR_NO_MESSAGE;
-        goto free_stream;
-    }
+        nccl_status = ncclCommInitRank(&team->nccl_comms[1], team->num_nodes,
+                                        team->unique_id[4*team->num_nodes*team->local_rank + 2],
+                                        team->nodeid);
+        if (nccl_status != ncclSuccess) {
+            tl_info(tl_team->context->lib, "NCCL error %d %s",
+                    nccl_status, ncclGetErrorString(nccl_status));
+            status = UCC_ERR_NO_MESSAGE;
+            goto free_stream;
+        }
 
-    nccl_status = ncclCommInitRank(&team->nccl_comms[2], team->local_size,
-                                    team->unique_id[4*team->nodeid+3],
-                                    team->local_rank);
-    if (nccl_status != ncclSuccess) {
-        tl_info(tl_team->context->lib, "NCCL error %d %s",
-                nccl_status, ncclGetErrorString(nccl_status));
-        status = UCC_ERR_NO_MESSAGE;
-        goto free_stream;
+        nccl_status = ncclCommInitRank(&team->nccl_comms[2], team->local_size,
+                                        team->unique_id[4*team->nodeid+3],
+                                        team->local_rank);
+        if (nccl_status != ncclSuccess) {
+            tl_info(tl_team->context->lib, "NCCL error %d %s",
+                    nccl_status, ncclGetErrorString(nccl_status));
+            status = UCC_ERR_NO_MESSAGE;
+            goto free_stream;
+        }
     }
 
     ucc_free(team->unique_id);

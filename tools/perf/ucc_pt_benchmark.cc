@@ -58,7 +58,7 @@ ucc_status_t ucc_pt_benchmark::run_bench() noexcept
             warmup = config.n_warmup_large;
         }
         UCCCHECK_GOTO(coll->init_coll_args(cnt, args), exit_err, st);
-        UCCCHECK_GOTO(run_single_test(args, iter, warmup, time), free_coll, st);
+        UCCCHECK_GOTO(run_single_test(args, warmup, iter, time), free_coll, st);
         coll->free_coll_args(args);
         print_time(cnt, time);
     }
@@ -97,6 +97,14 @@ ucc_status_t ucc_pt_benchmark::run_single_test(ucc_coll_args_t args,
             goto exit_err;
         }
         if (i >= nwarmup) {
+            // if (comm->get_rank() == 0) {
+            //     std::cout << nwarmup << " "<< niter<<std::endl;
+            //     std::chrono::nanoseconds time_cur;
+            //     time_cur = std::chrono::duration_cast<std::chrono::nanoseconds>(f - s);
+            //     std::cout << "time "
+            //               << (float)time_cur.count()/ 1000.0
+            //               << std::endl;
+            // }
             time += std::chrono::duration_cast<std::chrono::nanoseconds>(f - s);
         }
         UCCCHECK_GOTO(comm->barrier(), exit_err, st);

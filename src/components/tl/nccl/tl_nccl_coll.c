@@ -9,9 +9,13 @@
 #include "core/ucc_ee.h"
 #include "utils/ucc_math.h"
 #include "utils/ucc_coll_utils.h"
+#include "utils/profile/ucc_profile.h"
+#include <sys/time.h>
 
 #define ncclOpUnsupported (ncclNumOps + 1)
 #define ncclDataTypeUnsupported (ncclNumTypes + 1)
+
+struct timeval start_coll[3];
 
 ncclDataType_t ucc_to_nccl_dtype[] = {
     [UCC_DT_INT8]        = (ncclDataType_t)ncclInt8,
@@ -64,6 +68,41 @@ ucc_status_t ucc_tl_nccl_collective_progress(ucc_coll_task_t *coll_task)
 
     status = ucc_mc_ee_event_test(task->completed, UCC_EE_CUDA_STREAM);
     coll_task->super.status = status;
+
+    if (status == UCC_OK) {
+        struct timeval end_coll;
+        int elapsed;
+        int rank = task->team->rank;
+        gettimeofday(&end_coll, NULL);
+        switch(task->args.coll_type) {
+            case UCC_COLL_TYPE_ALLREDUCE:
+                elapsed = ((end_coll.tv_sec - start_coll[1].tv_sec) * 1000000) +
+                          (end_coll.tv_usec - start_coll[1].tv_usec);
+                if (rank == 0){
+                    printf("time for ar: %d\n", elapsed);
+                }
+                UCC_PROFILE_REQUEST_EVENT(task, "nccl_allreduce_finish", 0);
+                break;
+            case UCC_COLL_TYPE_REDUCE_SCATTER:
+                elapsed = ((end_coll.tv_sec - start_coll[0].tv_sec) * 1000000) +
+                          (end_coll.tv_usec - start_coll[0].tv_usec);
+                if (rank == 0){
+                    printf("time for rs: %d\n", elapsed);
+                }
+                UCC_PROFILE_REQUEST_EVENT(task, "nccl_reducescatter_finish", 0);
+                break;
+            case UCC_COLL_TYPE_ALLGATHER:
+                elapsed = ((end_coll.tv_sec - start_coll[0].tv_sec) * 1000000) +
+                          (end_coll.tv_usec - start_coll[0].tv_usec);
+                if (rank == 0){
+                    printf("time for ag: %d\n", elapsed);
+                }
+                UCC_PROFILE_REQUEST_EVENT(task, "nccl_allgather_finish", 0);
+                break;
+            default:
+                break;
+        }
+    }
     return status;
 }
 
@@ -212,6 +251,8 @@ ucc_status_t ucc_tl_nccl_allreduce_start(ucc_coll_task_t *coll_task)
                                     task->args.reduce.predefined_op];
     size_t              count  = task->args.src.info.count;
 
+    gettimeofday(&start_coll[1], NULL);
+    UCC_PROFILE_REQUEST_EVENT(task, "nccl_allreduce_start", 0);
     task->super.super.status = UCC_INPROGRESS;
     if (nccl_lib->cfg.pp_allreduce == 0) {
         NCCLCHECK_GOTO(ncclAllReduce(src, dst, count, dt, op, team->nccl_comm,
@@ -286,6 +327,7 @@ ucc_status_t ucc_tl_nccl_allreduce_init(ucc_tl_nccl_task_t *task)
 {
     // ucc_tl_nccl_lib_t *nccl_lib = ucc_derived_of(task->team->super.super.context->lib,
     //                                              ucc_tl_nccl_lib_t);
+
     if ((task->args.mask & UCC_COLL_ARGS_FIELD_USERDEFINED_REDUCTIONS) ||
         (ucc_to_nccl_reduce_op[task->args.reduce.predefined_op] ==
          ncclOpUnsupported)) {
@@ -299,6 +341,7 @@ ucc_status_t ucc_tl_nccl_allreduce_init(ucc_tl_nccl_task_t *task)
                  "dataype is not supported");
         return UCC_ERR_NOT_SUPPORTED;
     }
+    UCC_PROFILE_REQUEST_NEW(task, "tl_nccl_task", 0);
 
     // if (nccl_lib->cfg.pp_allreduce == 0) {
     //     task->super.post     = ucc_tl_nccl_allreduce_start;
@@ -328,7 +371,8 @@ ucc_status_t ucc_tl_nccl_reduce_scatter_start(ucc_coll_task_t *coll_task)
     size_t              count  = task->args.src.info.count;
 
     task->super.super.status = UCC_INPROGRESS;
-
+    gettimeofday(&start_coll[0], NULL);
+    UCC_PROFILE_REQUEST_EVENT(task, "nccl_reducescatter_start", 0);
     // fprintf(stdout, "rank %d starting reduce scatter task %p\n", team->rank, task);
     NCCLCHECK_GOTO(ncclReduceScatter(src, dst, count, dt, op,
                                      team->nccl_comms[0], team->streams[0]),
@@ -358,6 +402,7 @@ ucc_status_t ucc_tl_nccl_reduce_scatter_init(ucc_tl_nccl_task_t *task)
                  "dataype is not supported");
         return UCC_ERR_NOT_SUPPORTED;
     }
+    UCC_PROFILE_REQUEST_NEW(task, "tl_nccl_task", 0);
 
     task->super.post     = ucc_tl_nccl_reduce_scatter_start;
     task->super.progress = ucc_tl_nccl_collective_progress;
@@ -382,8 +427,8 @@ ucc_status_t ucc_tl_nccl_allgather_start(ucc_coll_task_t *coll_task)
                count * ucc_dt_size(task->args.dst.info.datatype) * team->local_rank);
     }
     task->super.super.status = UCC_INPROGRESS;
-    // fprintf(stdout, "rank %d starting allgather  task %p\n", team->rank, task);
-
+    gettimeofday(&start_coll[2], NULL);
+    UCC_PROFILE_REQUEST_EVENT(task, "nccl_allgather_start", 0);
     NCCLCHECK_GOTO(ncclAllGather(src, dst, count, dt, team->nccl_comms[2], team->streams[2]),
                    exit_coll, status, UCC_TL_TEAM_LIB(team));
     status = ucc_mc_ee_event_post(team->streams[2], task->completed, UCC_EE_CUDA_STREAM);
@@ -409,6 +454,8 @@ ucc_status_t ucc_tl_nccl_allgather_init(ucc_tl_nccl_task_t *task)
                  "dataype is not supported");
         return UCC_ERR_NOT_SUPPORTED;
     }
+    UCC_PROFILE_REQUEST_NEW(task, "tl_nccl_task", 0);
+
     task->super.post     = ucc_tl_nccl_allgather_start;
     task->super.progress = ucc_tl_nccl_collective_progress;
     return UCC_OK;
@@ -420,6 +467,7 @@ ucc_status_t ucc_tl_nccl_coll_finalize(ucc_coll_task_t *coll_task)
     ucc_status_t       status = UCC_OK ;
 
     tl_info(UCC_TL_TEAM_LIB(task->team), "finalizing coll task %p", task);
+    UCC_PROFILE_REQUEST_FREE(task);
     ucc_mc_ee_destroy_event(task->completed, UCC_EE_CUDA_STREAM);
     ucc_mpool_put(task);
     return status;
