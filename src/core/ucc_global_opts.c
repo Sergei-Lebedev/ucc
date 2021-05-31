@@ -10,7 +10,11 @@
 UCC_LIST_HEAD(ucc_config_global_list);
 
 ucc_global_config_t ucc_global_config = {
+#ifdef HAVE_UCS_LOG_COMPONENT_CONFIG_FILE_FILTER
+    .log_component  = {UCC_LOG_LEVEL_WARN, "UCC", "*"},
+#else
     .log_component  = {UCC_LOG_LEVEL_WARN, "UCC"},
+#endif
     .component_path = "",
     .initialized    = 0,
 };

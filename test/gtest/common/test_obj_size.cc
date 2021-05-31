@@ -22,6 +22,7 @@ class test_obj_size : public ucc::test {
 
 UCC_TEST_F(test_obj_size, size) {
 
+    int expected_size = 120;
 #if ENABLE_DEBUG_DATA
     UCC_TEST_SKIP_R("Debug data");
 #elif defined (ENABLE_STATS)
@@ -30,7 +31,10 @@ UCC_TEST_F(test_obj_size, size) {
     UCC_TEST_SKIP_R("Assert enabled");
 #else
 
-    EXPECTED_SIZE(ucc_global_config_t, 120);
+#ifdef HAVE_UCS_LOG_COMPONENT_CONFIG_FILE_FILTER
+    expected_size += sizeof(((ucs_log_component_config  *)0)->file_filter);
+#endif
+    EXPECTED_SIZE(ucc_global_config_t, expected_size);
 
 #endif
 }

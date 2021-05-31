@@ -21,22 +21,31 @@ ucc_config_field_t ucc_tl_context_config_table[] = {
 UCC_CLASS_INIT_FUNC(ucc_tl_lib_t, ucc_tl_iface_t *tl_iface,
                     const ucc_tl_lib_config_t *tl_config)
 {
+    ucc_log_level_t log_level = tl_config->super.log_component.log_level;
+    ucc_status_t status;
+
     UCC_CLASS_CALL_BASE_INIT();
     self->iface         = tl_iface;
-    self->super.log_component = tl_config->super.log_component;
     if (0 == strcmp(tl_config->super.score_str, "0")) {
         return UCC_ERR_NO_MESSAGE;
     }
-    ucc_strncpy_safe(self->super.log_component.name,
-                     tl_iface->tl_lib_config.name,
-                     sizeof(self->super.log_component.name));
+
+    status = ucc_log_component_config_init(&self->super.log_component,
+                                           tl_iface->tl_lib_config.name,
+                                           log_level);
+    if (UCC_OK != status) {
+        ucc_error("failed to init log component for TL %s",
+                  tl_iface->tl_lib_config.name);
+        return status;
+    }
     self->super.score_str = strdup(tl_config->super.score_str);
     return UCC_OK;
 }
 
 UCC_CLASS_CLEANUP_FUNC(ucc_tl_lib_t)
 {
-    ucc_free(self->super.score_str);
+    ucc_log_component_config_free(&self->super.log_component);
+    free(self->super.score_str);
 }
 
 UCC_CLASS_DEFINE(ucc_tl_lib_t, void);

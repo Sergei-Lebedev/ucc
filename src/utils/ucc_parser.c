@@ -41,3 +41,27 @@ void ucc_config_names_array_free(ucc_config_names_array_t *array)
     }
     ucc_free(array->names);
 }
+
+ucc_status_t ucc_log_component_config_init(ucc_log_component_config_t *log_comp,
+                                           const char *name,
+                                           ucc_log_level_t log_level)
+{
+    log_comp->log_level = log_level;
+    ucc_strncpy_safe(log_comp->name, name, sizeof(log_comp->name));
+#ifdef HAVE_UCS_LOG_COMPONENT_CONFIG_FILE_FILTER
+    log_comp->file_filter = strdup("*");
+    if (!log_comp->file_filter) {
+        ucc_error("failed to dup ucc_log_component_config_t.file_filter");
+        return UCC_ERR_NO_MEMORY;
+    }
+#endif
+    return UCC_OK;
+}
+
+void ucc_log_component_config_free(ucc_log_component_config_t *log_comp)
+{
+#ifdef HAVE_UCS_LOG_COMPONENT_CONFIG_FILE_FILTER
+    free((void*)log_comp->file_filter);
+#endif
+    return;
+}

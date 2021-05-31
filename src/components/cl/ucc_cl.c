@@ -36,16 +36,25 @@ const char *ucc_cl_names[] = {
 UCC_CLASS_INIT_FUNC(ucc_cl_lib_t, ucc_cl_iface_t *cl_iface,
                     const ucc_cl_lib_config_t *cl_config)
 {
+    ucc_log_level_t log_level = cl_config->super.log_component.log_level;
     ucc_status_t status;
+
     UCC_CLASS_CALL_BASE_INIT();
     self->iface         = cl_iface;
-    self->super.log_component = cl_config->super.log_component;
-    ucc_strncpy_safe(self->super.log_component.name,
-                     cl_iface->cl_lib_config.name,
-                     sizeof(self->super.log_component.name));
+
+    status = ucc_log_component_config_init(&self->super.log_component,
+                                           cl_iface->cl_lib_config.name,
+                                           log_level);
+    if (UCC_OK != status) {
+        ucc_error("failed to init log component for CL %s",
+                  cl_iface->cl_lib_config.name);
+        return status;
+    }
     self->super.score_str = strdup(cl_config->super.score_str);
     status = ucc_config_names_array_dup(&self->tls, &cl_config->tls);
     if (UCC_OK != status) {
+        free(self->super.score_str);
+        ucc_log_component_config_free(&self->super.log_component);
         ucc_error("failed to dup TLS config_names_array for CL %s",
                   cl_iface->cl_lib_config.name);
     }
@@ -54,7 +63,8 @@ UCC_CLASS_INIT_FUNC(ucc_cl_lib_t, ucc_cl_iface_t *cl_iface,
 
 UCC_CLASS_CLEANUP_FUNC(ucc_cl_lib_t)
 {
-    ucc_free(self->super.score_str);
+    ucc_log_component_config_free(&self->super.log_component);
+    free(self->super.score_str);
     ucc_config_names_array_free(&self->tls);
 }
 

@@ -17,14 +17,17 @@ static ucc_config_field_t ucc_mc_cpu_config_table[] = {
 
 static ucc_status_t ucc_mc_cpu_init()
 {
-    ucc_strncpy_safe(ucc_mc_cpu.super.config->log_component.name,
-                     ucc_mc_cpu.super.super.name,
-                     sizeof(ucc_mc_cpu.super.config->log_component.name));
+    ucc_mc_cpu_config_t *cfg = MC_CPU_CONFIG;
+
+    ucc_log_component_config_init(&ucc_mc_cpu.super.config->log_component,
+                                  ucc_mc_cpu.super.super.name,
+                                  cfg->super.log_component.log_level);
     return UCC_OK;
 }
 
 static ucc_status_t ucc_mc_cpu_finalize()
 {
+    ucc_log_component_config_free(&ucc_mc_cpu.super.config->log_component);
     return UCC_OK;
 }
 

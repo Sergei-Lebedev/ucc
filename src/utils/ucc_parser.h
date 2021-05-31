@@ -19,6 +19,7 @@
 #include <ucs/config/types.h>
 #include <ucs/config/parser.h>
 
+typedef ucs_log_level_t                ucc_log_level_t;
 typedef ucs_config_field_t             ucc_config_field_t;
 typedef ucs_config_names_array_t       ucc_config_names_array_t;
 typedef ucs_config_global_list_entry_t ucc_config_global_list_entry_t;
@@ -112,4 +113,11 @@ ucc_status_t ucc_config_names_array_dup(ucc_config_names_array_t *dst,
                                         const ucc_config_names_array_t *src);
 
 void ucc_config_names_array_free(ucc_config_names_array_t *array);
+
+ucc_status_t ucc_log_component_config_init(ucc_log_component_config_t *log_comp,
+                                           const char *name,
+                                           ucs_log_level_t log_level);
+
+void ucc_log_component_config_free(ucc_log_component_config_t *log_comp);
+
 #endif

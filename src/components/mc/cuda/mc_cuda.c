@@ -142,9 +142,9 @@ static ucc_status_t ucc_mc_cuda_init()
     CUdevice cu_dev;
     cudaError_t cuda_st;
 
-    ucc_strncpy_safe(ucc_mc_cuda.super.config->log_component.name,
-                     ucc_mc_cuda.super.super.name,
-                     sizeof(ucc_mc_cuda.super.config->log_component.name));
+    ucc_log_component_config_init(&ucc_mc_cuda.super.config->log_component,
+                                  ucc_mc_cuda.super.super.name,
+                                  cfg->super.log_component.log_level);
     cuda_st = cudaGetDeviceCount(&num_devices);
     if ((cuda_st != cudaSuccess) || (num_devices == 0)) {
         mc_info(&ucc_mc_cuda.super, "cuda devices are not found");
@@ -218,6 +218,7 @@ static ucc_status_t ucc_mc_cuda_init()
 static ucc_status_t ucc_mc_cuda_finalize()
 {
     CUDACHECK(cudaStreamDestroy(ucc_mc_cuda.stream));
+    ucc_log_component_config_free(&ucc_mc_cuda.super.config->log_component);
     return UCC_OK;
 }
 

@@ -19,4 +19,8 @@ typedef struct ucc_mc_cpu {
 } ucc_mc_cpu_t;
 
 extern ucc_mc_cpu_t ucc_mc_cpu;
+
+#define MC_CPU_CONFIG                                                          \
+    (ucc_derived_of(ucc_mc_cpu.super.config, ucc_mc_cpu_config_t))
+
 #endif

@@ -82,6 +82,10 @@ AS_IF([test "x$ucx_checked" != "xyes"],[
 
             AC_SUBST(UCX_LIBADD, "-lucp -lucm")
             AC_SUBST(UCS_LIBADD, "-lucs")
+            AC_CHECK_MEMBER([struct ucs_log_component_config.file_filter],
+                            [AC_DEFINE(HAVE_UCS_LOG_COMPONENT_CONFIG_FILE_FILTER,
+                                       "1", "")],
+                            [], [[#include <ucs/config/types.h>]])
         ],
         [
             AS_IF([test "x$with_ucx" != "xguess"],
@@ -99,7 +103,7 @@ AS_IF([test "x$ucx_checked" != "xyes"],[
 
     ],
     [
-        AC_MSG_WARN([UCX was explicitly disabled])
+        AC_MSG_ERROR([UCX was explicitly disabled])
     ])
 
     ucx_checked=yes
