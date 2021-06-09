@@ -194,6 +194,50 @@ ucc_status_t ucc_tl_nccl_alltoallv_init(ucc_tl_nccl_task_t *task)
 
 ucc_status_t ucc_tl_nccl_allreduce_start(ucc_coll_task_t *coll_task)
 {
+
+    ucc_tl_nccl_task_t *task   = ucc_derived_of(coll_task, ucc_tl_nccl_task_t);
+    ucc_tl_nccl_lib_t *nccl_lib = ucc_derived_of(task->team->super.super.context->lib,
+                                                 ucc_tl_nccl_lib_t);
+    ucc_tl_nccl_team_t *team   = task->team;
+//    ucc_ee_h            ee     = coll_task->ee;
+//    cudaStream_t        stream = (ee) ? (cudaStream_t) ee->ee_context : team->stream;
+    void               *dst    = task->args.dst.info.buffer;
+    void               *src    = UCC_IS_INPLACE(task->args) ?
+                                    task->args.dst.info.buffer:
+                                    task->args.src.info.buffer;
+    ucc_status_t        status = UCC_OK;
+    ncclDataType_t      dt     = ucc_to_nccl_dtype[
+                                    task->args.src.info.datatype];
+    ncclRedOp_t         op     = ucc_to_nccl_reduce_op[
+                                    task->args.reduce.predefined_op];
+    size_t              count  = task->args.src.info.count;
+
+    task->super.super.status = UCC_INPROGRESS;
+    if (nccl_lib->cfg.pp_allreduce == 0) {
+        NCCLCHECK_GOTO(ncclAllReduce(src, dst, count, dt, op, team->nccl_comm,
+                                     team->stream),
+                    exit_coll, status, UCC_TL_TEAM_LIB(team));
+        status = ucc_mc_ee_event_post(team->stream, task->completed, UCC_EE_CUDA_STREAM);
+    } else {
+        NCCLCHECK_GOTO(ncclAllReduce(src, dst, count, dt, op, team->nccl_comms[1],
+                                    team->streams[1]),
+                    exit_coll, status, UCC_TL_TEAM_LIB(team));
+        status = ucc_mc_ee_event_post(team->streams[1], task->completed, UCC_EE_CUDA_STREAM);
+    }
+
+
+
+exit_coll:
+    if (status == UCC_OK) {
+        ucc_progress_enqueue(UCC_TL_CORE_CTX(team)->pq, &task->super);
+    } else if (ucc_unlikely(status < 0)) {
+        task->super.super.status = status;
+    }
+    return status;
+}
+
+ucc_status_t ucc_tl_nccl_allreduce_start_pp(ucc_coll_task_t *coll_task)
+{
     ucc_tl_nccl_task_t *task   = ucc_derived_of(coll_task, ucc_tl_nccl_task_t);
     ucc_tl_nccl_team_t *team   = task->team;
     ucc_ee_h            ee     = coll_task->ee;
@@ -208,9 +252,24 @@ ucc_status_t ucc_tl_nccl_allreduce_start(ucc_coll_task_t *coll_task)
     ncclRedOp_t         op     = ucc_to_nccl_reduce_op[
                                     task->args.reduce.predefined_op];
     size_t              count  = task->args.src.info.count;
+    size_t              chunk_count  = count / team->local_size;
+    size_t              chunk_size = chunk_count * ucc_dt_size(task->args.src.info.datatype);
+
 
     task->super.super.status = UCC_INPROGRESS;
-    NCCLCHECK_GOTO(ncclAllReduce(src, dst, count, dt, op, team->nccl_comm,
+
+    NCCLCHECK_GOTO(ncclReduceScatter(src, PTR_OFFSET(dst, chunk_size*team->local_rank),
+                                     chunk_count, dt, op,
+                                     team->nccl_comms[0], stream),
+                   exit_coll, status, UCC_TL_TEAM_LIB(team));
+    NCCLCHECK_GOTO(ncclAllReduce(PTR_OFFSET(dst, chunk_size*team->local_rank),
+                                 PTR_OFFSET(dst, chunk_size*team->local_rank),
+                                 chunk_count, dt, op,
+                                 team->nccl_comms[1], stream),
+                   exit_coll, status, UCC_TL_TEAM_LIB(team));
+
+    NCCLCHECK_GOTO(ncclAllGather(PTR_OFFSET(dst, chunk_size*team->local_rank), dst,
+                                 chunk_count, dt, team->nccl_comms[2],
                                  stream),
                    exit_coll, status, UCC_TL_TEAM_LIB(team));
     status = ucc_mc_ee_event_post(stream, task->completed, UCC_EE_CUDA_STREAM);
@@ -225,6 +284,8 @@ exit_coll:
 
 ucc_status_t ucc_tl_nccl_allreduce_init(ucc_tl_nccl_task_t *task)
 {
+    // ucc_tl_nccl_lib_t *nccl_lib = ucc_derived_of(task->team->super.super.context->lib,
+    //                                              ucc_tl_nccl_lib_t);
     if ((task->args.mask & UCC_COLL_ARGS_FIELD_USERDEFINED_REDUCTIONS) ||
         (ucc_to_nccl_reduce_op[task->args.reduce.predefined_op] ==
          ncclOpUnsupported)) {
@@ -238,7 +299,67 @@ ucc_status_t ucc_tl_nccl_allreduce_init(ucc_tl_nccl_task_t *task)
                  "dataype is not supported");
         return UCC_ERR_NOT_SUPPORTED;
     }
+
+    // if (nccl_lib->cfg.pp_allreduce == 0) {
+    //     task->super.post     = ucc_tl_nccl_allreduce_start;
+    // } else if (nccl_lib->cfg.pp_allreduce == 1) {
+    //     task->super.post     = ucc_tl_nccl_allreduce_start_pp;
+    // }
     task->super.post     = ucc_tl_nccl_allreduce_start;
+    task->super.progress = ucc_tl_nccl_collective_progress;
+    return UCC_OK;
+}
+
+ucc_status_t ucc_tl_nccl_reduce_scatter_start(ucc_coll_task_t *coll_task)
+{
+    ucc_tl_nccl_task_t *task   = ucc_derived_of(coll_task, ucc_tl_nccl_task_t);
+    ucc_tl_nccl_team_t *team   = task->team;
+//    ucc_ee_h            ee     = coll_task->ee;
+//    cudaStream_t        stream = (ee) ? (cudaStream_t) ee->ee_context : team->stream;
+    void               *dst    = task->args.dst.info.buffer;
+    void               *src    = UCC_IS_INPLACE(task->args) ?
+                                    task->args.dst.info.buffer:
+                                    task->args.src.info.buffer;
+    ucc_status_t        status = UCC_OK;
+    ncclDataType_t      dt     = ucc_to_nccl_dtype[
+                                    task->args.src.info.datatype];
+    ncclRedOp_t         op     = ucc_to_nccl_reduce_op[
+                                    task->args.reduce.predefined_op];
+    size_t              count  = task->args.src.info.count;
+
+    task->super.super.status = UCC_INPROGRESS;
+
+    // fprintf(stdout, "rank %d starting reduce scatter task %p\n", team->rank, task);
+    NCCLCHECK_GOTO(ncclReduceScatter(src, dst, count, dt, op,
+                                     team->nccl_comms[0], team->streams[0]),
+                   exit_coll, status, UCC_TL_TEAM_LIB(team));
+    status = ucc_mc_ee_event_post(team->streams[0], task->completed, UCC_EE_CUDA_STREAM);
+exit_coll:
+    if (status == UCC_OK) {
+        ucc_progress_enqueue(UCC_TL_CORE_CTX(team)->pq, &task->super);
+    } else if (ucc_unlikely(status < 0)) {
+        task->super.super.status = status;
+    }
+    return status;
+}
+
+ucc_status_t ucc_tl_nccl_reduce_scatter_init(ucc_tl_nccl_task_t *task)
+{
+    if ((task->args.mask & UCC_COLL_ARGS_FIELD_USERDEFINED_REDUCTIONS) ||
+        (ucc_to_nccl_reduce_op[task->args.reduce.predefined_op] ==
+         ncclOpUnsupported)) {
+        tl_error(UCC_TL_TEAM_LIB(task->team),
+                 "reduction operation is not supported");
+        return UCC_ERR_NOT_SUPPORTED;
+    }
+    if (UCC_OK != ucc_nccl_check_dt_supported(task->args.src.info.datatype,
+                                              task->args.src.info.datatype)) {
+        tl_error(UCC_TL_TEAM_LIB(task->team),
+                 "dataype is not supported");
+        return UCC_ERR_NOT_SUPPORTED;
+    }
+
+    task->super.post     = ucc_tl_nccl_reduce_scatter_start;
     task->super.progress = ucc_tl_nccl_collective_progress;
     return UCC_OK;
 }
@@ -247,8 +368,8 @@ ucc_status_t ucc_tl_nccl_allgather_start(ucc_coll_task_t *coll_task)
 {
     ucc_tl_nccl_task_t *task   = ucc_derived_of(coll_task, ucc_tl_nccl_task_t);
     ucc_tl_nccl_team_t *team   = task->team;
-    ucc_ee_h            ee     = coll_task->ee;
-    cudaStream_t        stream = (ee) ? (cudaStream_t) ee->ee_context : team->stream;
+//    ucc_ee_h            ee     = coll_task->ee;
+//    cudaStream_t        stream = (ee) ? (cudaStream_t) ee->ee_context : team->stream;
     void               *dst    = task->args.dst.info.buffer;
     void               *src    = task->args.src.info.buffer;
     ncclDataType_t      dt     = ucc_to_nccl_dtype[
@@ -258,12 +379,14 @@ ucc_status_t ucc_tl_nccl_allgather_start(ucc_coll_task_t *coll_task)
 
     if (UCC_IS_INPLACE(task->args)) {
         src = (void*)((ptrdiff_t)task->args.dst.info.buffer +
-               count * ucc_dt_size(task->args.dst.info.datatype) * team->rank);
+               count * ucc_dt_size(task->args.dst.info.datatype) * team->local_rank);
     }
     task->super.super.status = UCC_INPROGRESS;
-    NCCLCHECK_GOTO(ncclAllGather(src, dst, count, dt, team->nccl_comm, stream),
+    // fprintf(stdout, "rank %d starting allgather  task %p\n", team->rank, task);
+
+    NCCLCHECK_GOTO(ncclAllGather(src, dst, count, dt, team->nccl_comms[2], team->streams[2]),
                    exit_coll, status, UCC_TL_TEAM_LIB(team));
-    status = ucc_mc_ee_event_post(stream, task->completed, UCC_EE_CUDA_STREAM);
+    status = ucc_mc_ee_event_post(team->streams[2], task->completed, UCC_EE_CUDA_STREAM);
 exit_coll:
     if (status == UCC_OK) {
         ucc_progress_enqueue(UCC_TL_CORE_CTX(team)->pq, &task->super);
@@ -288,6 +411,177 @@ ucc_status_t ucc_tl_nccl_allgather_init(ucc_tl_nccl_task_t *task)
     }
     task->super.post     = ucc_tl_nccl_allgather_start;
     task->super.progress = ucc_tl_nccl_collective_progress;
+    return UCC_OK;
+}
+
+ucc_status_t ucc_tl_nccl_coll_finalize(ucc_coll_task_t *coll_task)
+{
+    ucc_tl_nccl_task_t *task  = ucc_derived_of(coll_task, ucc_tl_nccl_task_t);
+    ucc_status_t       status = UCC_OK ;
+
+    tl_info(UCC_TL_TEAM_LIB(task->team), "finalizing coll task %p", task);
+    ucc_mc_ee_destroy_event(task->completed, UCC_EE_CUDA_STREAM);
+    ucc_mpool_put(task);
+    return status;
+}
+
+ucc_status_t ucc_tl_nccl_allreduce_schedule_init_frag(ucc_base_coll_args_t *coll_args,
+                                                      ucc_base_team_t *team,
+                                                      ucc_schedule_frag_t **frag_p)
+{
+    ucc_tl_nccl_team_t   *nccl_team = ucc_derived_of(team, ucc_tl_nccl_team_t);
+    ucc_tl_nccl_context_t *nccl_ctx  = ucc_derived_of(team->context,
+                                                      ucc_tl_nccl_context_t);
+    ucc_schedule_frag_t *frag = ucc_malloc(sizeof(*frag), "nccl ar frag");
+    ucc_status_t       status = UCC_OK ;
+    ucc_tl_nccl_task_t  *task, *rs_task, *ar_task;
+
+    ucc_schedule_frag_init(frag, team->context->ucc_context);
+
+    task = ucc_mpool_get(&nccl_ctx->req_mp);
+    ucc_coll_task_init(&task->super);
+    memcpy(&task->args, &coll_args->args, sizeof(ucc_coll_args_t));
+    task->args.coll_type = UCC_COLL_TYPE_REDUCE_SCATTER;
+    task->team = nccl_team;
+    task->super.finalize = ucc_tl_nccl_coll_finalize;
+    status = ucc_mc_ee_create_event((void **)&task->completed, UCC_EE_CUDA_STREAM);
+    if (ucc_unlikely(status != UCC_OK)) {
+        tl_error(UCC_TL_TEAM_LIB(nccl_team), "failed to get ee event");
+    }
+    status = ucc_tl_nccl_reduce_scatter_init(task);
+    if (UCC_OK != status) {
+        tl_error(UCC_TL_TEAM_LIB(nccl_team), "failed to init reduce_scatter task");
+        return status;
+    }
+    ucc_coll_task_init_dependent(&task->super, 1);
+    ucc_schedule_frag_add_task(frag, &task->super);
+    ucc_event_manager_subscribe(&frag->super.super.em, UCC_EVENT_SCHEDULE_STARTED,
+                                &task->super);
+    rs_task = task;
+
+    task = ucc_mpool_get(&nccl_ctx->req_mp);
+    ucc_coll_task_init(&task->super);
+    memcpy(&task->args, &coll_args->args, sizeof(ucc_coll_args_t));
+    task->team = nccl_team;
+    task->super.finalize = ucc_tl_nccl_coll_finalize;
+    status = ucc_mc_ee_create_event((void **)&task->completed, UCC_EE_CUDA_STREAM);
+    if (ucc_unlikely(status != UCC_OK)) {
+        tl_error(UCC_TL_TEAM_LIB(nccl_team), "failed to get ee event");
+    }
+    task->args.coll_type = UCC_COLL_TYPE_ALLREDUCE;
+    task->args.mask |= UCC_COLL_ARGS_FIELD_FLAGS;
+    task->args.flags |= UCC_COLL_ARGS_FLAG_IN_PLACE;
+    status = ucc_tl_nccl_allreduce_init(task);
+    if (UCC_OK != status) {
+        tl_error(UCC_TL_TEAM_LIB(nccl_team), "failed to init allreduce task");
+        return status;
+    }
+    ucc_coll_task_init_dependent(&task->super, 1);
+    ucc_schedule_frag_add_task(frag, &task->super);
+    ucc_event_manager_subscribe(&rs_task->super.em, UCC_EVENT_COMPLETED, &task->super);
+    ar_task = task;
+
+    task = ucc_mpool_get(&nccl_ctx->req_mp);
+    ucc_coll_task_init(&task->super);
+    memcpy(&task->args, &coll_args->args, sizeof(ucc_coll_args_t));
+    task->team = nccl_team;
+    task->super.finalize = ucc_tl_nccl_coll_finalize;
+    status = ucc_mc_ee_create_event((void **)&task->completed, UCC_EE_CUDA_STREAM);
+    if (ucc_unlikely(status != UCC_OK)) {
+        tl_error(UCC_TL_TEAM_LIB(nccl_team), "failed to get ee event");
+    }
+    task->args.coll_type = UCC_COLL_TYPE_ALLGATHER;
+    task->args.mask |= UCC_COLL_ARGS_FIELD_FLAGS;
+    task->args.flags |= UCC_COLL_ARGS_FLAG_IN_PLACE;
+    status = ucc_tl_nccl_allgather_init(task);
+    if (UCC_OK != status) {
+        tl_error(UCC_TL_TEAM_LIB(nccl_team), "failed to init allgather task");
+        return status;
+    }
+    ucc_coll_task_init_dependent(&task->super, 1);
+    ucc_schedule_frag_add_task(frag, &task->super);
+    ucc_event_manager_subscribe(&ar_task->super.em, UCC_EVENT_COMPLETED, &task->super);
+    *frag_p = frag;
+    return UCC_OK;
+}
+
+ucc_status_t ucc_tl_nccl_allreduce_schedule_finalize(ucc_schedule_frag_t *frag)
+{
+    ucc_free(frag);
+    return UCC_OK;
+}
+
+ucc_status_t ucc_tl_nccl_allreduce_schedule_setup_frag(ucc_schedule_pipelined_t *schedule_p,
+                                                       ucc_schedule_frag_t *frag, int frag_num)
+{
+
+    ucc_coll_args_t *args = &schedule_p->args.args;
+    ucc_datatype_t     dt        = args->src.info.datatype;
+    size_t             dt_size   = ucc_dt_size(dt);
+    ucc_coll_args_t *targs_rs, *targs_ar, *targs_ag;
+    int n_frags = schedule_p->super.n_tasks;
+
+    size_t frag_count = args->src.info.count / n_frags;
+    size_t left = args->src.info.count % n_frags;
+    size_t offset = frag_num * frag_count + left;
+
+    if (frag_num < left) {
+        frag_count++;
+        offset -= left - frag_num;
+    }
+
+    ucc_tl_nccl_team_t *team = ucc_derived_of(frag->tasks[0], ucc_tl_nccl_task_t)->team;
+    size_t chunk_count  = frag_count / team->local_size;
+    size_t chunk_size = chunk_count * dt_size;
+
+//    fprintf(stdout, "setup frag %d frag count %d offset %d n_frags %d\n", frag_num, (int)frag_count, (int)offset, n_frags);
+    targs_rs = &ucc_derived_of(frag->tasks[0], ucc_tl_nccl_task_t)->args;
+    targs_rs->src.info.buffer = PTR_OFFSET(args->src.info.buffer, offset * dt_size);
+    targs_rs->dst.info.buffer = PTR_OFFSET(args->dst.info.buffer, offset * dt_size + chunk_size * team->local_rank);
+    targs_rs->src.info.count = chunk_count;
+    targs_rs->dst.info.count = chunk_count;
+
+    targs_ar = &ucc_derived_of(frag->tasks[1], ucc_tl_nccl_task_t)->args;
+    targs_ar->dst.info.buffer = targs_rs->dst.info.buffer;
+    targs_ar->src.info.count = chunk_count;
+    targs_ar->dst.info.count = chunk_count;
+
+    targs_ag = &ucc_derived_of(frag->tasks[2], ucc_tl_nccl_task_t)->args;
+    targs_ag->dst.info.buffer = PTR_OFFSET(args->dst.info.buffer, offset * dt_size);
+    targs_ag->src.info.count = chunk_count;
+    targs_ag->dst.info.count = chunk_count;
+
+    return UCC_OK;
+}
+ucc_status_t ucc_tl_nccl_allreduce_schedule_init(ucc_base_coll_args_t *coll_args,
+                                                 ucc_tl_nccl_team_t *team,
+                                                 ucc_coll_task_t **task_h)
+{
+    ucc_tl_nccl_lib_t *nccl_lib = ucc_derived_of(team->super.super.context->lib,
+                                                 ucc_tl_nccl_lib_t);
+    ucc_schedule_pipelined_t *schedule_p;
+
+    size_t msgsize = coll_args->args.src.info.count *
+                     ucc_dt_size(coll_args->args.src.info.datatype);
+
+    int n_frags = 1;
+    int pipeline_depth;
+    if (msgsize > nccl_lib->cfg.frag_thresh) {
+        int min_num_frags = msgsize / nccl_lib->cfg.frag_size;
+        n_frags = ucc_max(min_num_frags, nccl_lib->cfg.n_frags);
+    }
+
+    pipeline_depth = ucc_min(n_frags, nccl_lib->cfg.pipeline_depth);
+    // fprintf(stdout, "src %p dst %p nfrags %d pp_depth %d\n", coll_args->args.src.info.buffer,
+    //                                            coll_args->args.dst.info.buffer,
+    //                                            n_frags, pipeline_depth);
+    coll_args->args.dst.info.datatype = coll_args->args.src.info.datatype;
+    ucc_schedule_pipelined_init(coll_args, &team->super.super,
+                                ucc_tl_nccl_allreduce_schedule_init_frag,
+                                ucc_tl_nccl_allreduce_schedule_finalize,
+                                ucc_tl_nccl_allreduce_schedule_setup_frag,
+                                pipeline_depth, n_frags, &schedule_p);
+    *task_h = &schedule_p->super.super;
     return UCC_OK;
 }
 

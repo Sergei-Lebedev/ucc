@@ -26,6 +26,11 @@ extern ucc_tl_nccl_iface_t ucc_tl_nccl;
 
 typedef struct ucc_tl_nccl_lib_config {
     ucc_tl_lib_config_t super;
+    int                 pp_allreduce;
+    uint32_t            n_frags;
+    uint32_t            pipeline_depth;
+    size_t              frag_thresh;
+    size_t              frag_size;
 } ucc_tl_nccl_lib_config_t;
 
 typedef struct ucc_tl_nccl_context_config {
@@ -34,6 +39,7 @@ typedef struct ucc_tl_nccl_context_config {
 
 typedef struct ucc_tl_nccl_lib {
     ucc_tl_lib_t super;
+    ucc_tl_nccl_lib_config_t cfg;
 } ucc_tl_nccl_lib_t;
 UCC_CLASS_DECLARE(ucc_tl_nccl_lib_t, const ucc_base_lib_params_t *,
                   const ucc_base_config_t *);
@@ -46,6 +52,7 @@ typedef struct ucc_tl_nccl_context {
 UCC_CLASS_DECLARE(ucc_tl_nccl_context_t, const ucc_base_context_params_t *,
                   const ucc_base_config_t *);
 
+#define NUM_NCCL_COMMS 3
 typedef struct ucc_tl_nccl_team {
     ucc_tl_team_t        super;
     ncclUniqueId        *unique_id;
@@ -54,7 +61,16 @@ typedef struct ucc_tl_nccl_team {
     ncclComm_t           nccl_comm;
     ucc_rank_t           rank;
     ucc_rank_t           size;
+    ucc_rank_t           local_rank;
+    ucc_rank_t           local_size;
+    ucc_rank_t           num_nodes;
+    ucc_rank_t           nodeid;
     cudaStream_t         stream;
+//comms[0] intranode comm for reduce scatter
+//comms[1] internode comm for allreduce
+//comms[2] intranode comm for allgahter
+    ncclComm_t           nccl_comms[NUM_NCCL_COMMS];
+    cudaStream_t         streams[NUM_NCCL_COMMS];
 } ucc_tl_nccl_team_t;
 
 typedef struct ucc_tl_nccl_task {

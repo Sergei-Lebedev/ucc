@@ -17,6 +17,31 @@ static ucc_config_field_t ucc_tl_nccl_lib_config_table[] = {
     {"", "", NULL, ucc_offsetof(ucc_tl_nccl_lib_config_t, super),
      UCC_CONFIG_TYPE_TABLE(ucc_tl_lib_config_table)},
 
+    {"PP_ALLREDUCE", "0",
+     "Use pp allreduce",
+     ucc_offsetof(ucc_tl_nccl_lib_config_t, pp_allreduce),
+     UCC_CONFIG_TYPE_UINT},
+
+    {"FRAG_THRESH", "inf",
+     "",
+     ucc_offsetof(ucc_tl_nccl_lib_config_t, frag_thresh),
+     UCC_CONFIG_TYPE_MEMUNITS},
+
+    {"FRAG_SIZE", "inf",
+     "",
+     ucc_offsetof(ucc_tl_nccl_lib_config_t, frag_size),
+     UCC_CONFIG_TYPE_MEMUNITS},
+
+    {"N_FRAGS", "2",
+     "",
+     ucc_offsetof(ucc_tl_nccl_lib_config_t, n_frags),
+     UCC_CONFIG_TYPE_UINT},
+
+    {"PIPELINE_DEPTH", "2",
+     "",
+     ucc_offsetof(ucc_tl_nccl_lib_config_t, pipeline_depth),
+     UCC_CONFIG_TYPE_UINT},
+
     {NULL}};
 
 static ucs_config_field_t ucc_tl_nccl_context_config_table[] = {

@@ -10,9 +10,14 @@
 UCC_CLASS_INIT_FUNC(ucc_tl_nccl_lib_t, const ucc_base_lib_params_t *params,
                     const ucc_base_config_t *config)
 {
-    const ucc_tl_lib_config_t *tl_config =
-        ucc_derived_of(config, ucc_tl_lib_config_t);
-    UCC_CLASS_CALL_SUPER_INIT(ucc_tl_lib_t, &ucc_tl_nccl.super, tl_config);
+    const ucc_tl_nccl_lib_config_t *tl_config =
+        ucc_derived_of(config, ucc_tl_nccl_lib_config_t);
+    UCC_CLASS_CALL_SUPER_INIT(ucc_tl_lib_t, &ucc_tl_nccl.super, &tl_config->super);
+    self->cfg.pp_allreduce = tl_config->pp_allreduce;
+    self->cfg.n_frags = tl_config->n_frags;
+    self->cfg.pipeline_depth = tl_config->pipeline_depth;
+    self->cfg.frag_thresh = tl_config->frag_thresh;
+    self->cfg.frag_size = tl_config->frag_size;
     tl_info(&self->super, "initialized lib object: %p", self);
     return UCC_OK;
 }

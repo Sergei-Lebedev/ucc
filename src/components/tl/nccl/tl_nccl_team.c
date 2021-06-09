@@ -16,12 +16,25 @@ UCC_CLASS_INIT_FUNC(ucc_tl_nccl_team_t, ucc_base_context_t *tl_context,
     ucc_tl_nccl_context_t *ctx    =
         ucc_derived_of(tl_context, ucc_tl_nccl_context_t);
     ucc_status_t status;
+    char *env_loc_rank, *env_loc_size;
+    ncclResult_t st;
 
     UCC_CLASS_CALL_SUPER_INIT(ucc_tl_team_t, &ctx->super);
+    env_loc_rank = getenv("OMPI_COMM_WORLD_LOCAL_RANK");
+    env_loc_size = getenv("OMPI_COMM_WORLD_LOCAL_SIZE");
+    if (!env_loc_rank || ! env_loc_size) {
+        tl_error(ctx->super.super.lib, "mpi comm vars are not provided");
+        return UCC_ERR_NOT_FOUND;
+    }
+
+    self->local_rank = atoi(env_loc_rank);
+    self->local_size = atoi(env_loc_size);
     self->oob       = params->params.oob;
     self->size      = self->oob.participants;
     self->rank      = params->rank;
-    self->unique_id = ucc_malloc(sizeof(ncclUniqueId) * (self->size + 1),
+    self->num_nodes = self->size / self->local_size;
+    self->nodeid    = self->rank % self->num_nodes;
+    self->unique_id = ucc_malloc(sizeof(ncclUniqueId) * (4*(self->size + 1)),
                                  "tl_nccl_unique_id");
     if (!self->unique_id) {
         tl_error(ctx->super.super.lib,
@@ -29,16 +42,43 @@ UCC_CLASS_INIT_FUNC(ucc_tl_nccl_team_t, ucc_base_context_t *tl_context,
                  sizeof(ncclUniqueId) * (self->size + 1));
         return UCC_ERR_NO_MEMORY;
     }
+
     if (self->rank == 0) {
-        ncclResult_t st;
-        st = ncclGetUniqueId(&self->unique_id[self->size]);
+        st = ncclGetUniqueId(&self->unique_id[4*self->size]);
         if (st != ncclSuccess) {
             tl_error(ctx->super.super.lib, "failed to get unique id");
             memset(&self->unique_id[self->size], 0, sizeof(ncclUniqueId));
         }
     }
-    status = self->oob.allgather(&self->unique_id[self->size], self->unique_id,
-                                 sizeof(ncclUniqueId), self->oob.coll_info,
+
+    if (self->local_rank == 0) {
+        st = ncclGetUniqueId(&self->unique_id[4*self->size + 1]);
+        if (st != ncclSuccess) {
+            tl_error(ctx->super.super.lib, "failed to get unique id");
+            memset(&self->unique_id[self->size], 0, sizeof(ncclUniqueId));
+        }
+    }
+
+    if (self->nodeid == 0) {
+        st = ncclGetUniqueId(&self->unique_id[4*self->size + 2]);
+        if (st != ncclSuccess) {
+            tl_error(ctx->super.super.lib, "failed to get unique id");
+            memset(&self->unique_id[self->size], 0, sizeof(ncclUniqueId));
+        }
+    }
+
+
+    if (self->local_rank == 0) {
+        st = ncclGetUniqueId(&self->unique_id[4*self->size + 3]);
+        if (st != ncclSuccess) {
+            tl_error(ctx->super.super.lib, "failed to get unique id");
+            memset(&self->unique_id[self->size], 0, sizeof(ncclUniqueId));
+        }
+    }
+
+
+    status = self->oob.allgather(&self->unique_id[4*self->size], self->unique_id,
+                                 4*sizeof(ncclUniqueId), self->oob.coll_info,
                                  &self->oob_req);
     if (status != UCC_OK) {
         tl_error(ctx->super.super.lib, "failed to start oob allgather");
@@ -53,10 +93,17 @@ free_unique_id:
 
 UCC_CLASS_CLEANUP_FUNC(ucc_tl_nccl_team_t)
 {
+    int i;
+
     tl_info(self->super.super.context->lib, "finalizing tl team: %p", self);
     if (self->nccl_comm) {
         ncclCommDestroy(self->nccl_comm);
         cudaStreamDestroy(self->stream);
+        for (i = 0; i < NUM_NCCL_COMMS; i++) {
+            ncclCommDestroy(self->nccl_comms[i]);
+            cudaStreamDestroy(self->streams[i]);
+        }
+
     }
 }
 
@@ -75,6 +122,8 @@ ucc_status_t ucc_tl_nccl_team_create_test(ucc_base_team_t *tl_team)
     ucc_status_t status;
     ncclResult_t nccl_status;
     ncclUniqueId errorid;
+    int i;
+
     status = team->oob.req_test(team->oob_req);
     if (status == UCC_INPROGRESS) {
         return UCC_INPROGRESS;
@@ -99,7 +148,12 @@ ucc_status_t ucc_tl_nccl_team_create_test(ucc_base_team_t *tl_team)
     CUDACHECK_GOTO(cudaStreamCreateWithFlags(&team->stream,
                    cudaStreamNonBlocking), free_unique_id, status,
                    tl_team->context->lib);
-    nccl_status = ncclCommInitRank(&team->nccl_comm,team->size,
+    for (i = 0; i < NUM_NCCL_COMMS; i++) {
+        CUDACHECK_GOTO(cudaStreamCreateWithFlags(&(team->streams[i]),
+                       cudaStreamNonBlocking), free_unique_id, status,
+                       tl_team->context->lib);
+    }
+    nccl_status = ncclCommInitRank(&team->nccl_comm, team->size,
                                    team->unique_id[0], team->rank);
     if (nccl_status != ncclSuccess) {
         tl_info(tl_team->context->lib, "NCCL error %d %s",
@@ -107,6 +161,37 @@ ucc_status_t ucc_tl_nccl_team_create_test(ucc_base_team_t *tl_team)
         status = UCC_ERR_NO_MESSAGE;
         goto free_stream;
     }
+
+    nccl_status = ncclCommInitRank(&team->nccl_comms[0], team->local_size,
+                                    team->unique_id[4*team->nodeid+1],
+                                    team->local_rank);
+    if (nccl_status != ncclSuccess) {
+        tl_info(tl_team->context->lib, "NCCL error %d %s",
+                nccl_status, ncclGetErrorString(nccl_status));
+        status = UCC_ERR_NO_MESSAGE;
+        goto free_stream;
+    }
+
+    nccl_status = ncclCommInitRank(&team->nccl_comms[1], team->num_nodes,
+                                    team->unique_id[4*team->num_nodes*team->local_rank + 2],
+                                    team->nodeid);
+    if (nccl_status != ncclSuccess) {
+        tl_info(tl_team->context->lib, "NCCL error %d %s",
+                nccl_status, ncclGetErrorString(nccl_status));
+        status = UCC_ERR_NO_MESSAGE;
+        goto free_stream;
+    }
+
+    nccl_status = ncclCommInitRank(&team->nccl_comms[2], team->local_size,
+                                    team->unique_id[4*team->nodeid+3],
+                                    team->local_rank);
+    if (nccl_status != ncclSuccess) {
+        tl_info(tl_team->context->lib, "NCCL error %d %s",
+                nccl_status, ncclGetErrorString(nccl_status));
+        status = UCC_ERR_NO_MESSAGE;
+        goto free_stream;
+    }
+
     ucc_free(team->unique_id);
     tl_info(tl_team->context->lib, "initialized tl team: %p", team);
     return UCC_OK;
@@ -115,17 +200,6 @@ free_stream:
     cudaStreamDestroy(team->stream);
 free_unique_id:
     ucc_free(team->unique_id);
-    return status;
-}
-
-static ucc_status_t ucc_tl_nccl_coll_finalize(ucc_coll_task_t *coll_task)
-{
-    ucc_tl_nccl_task_t *task  = ucc_derived_of(coll_task, ucc_tl_nccl_task_t);
-    ucc_status_t       status = UCC_OK ;
-
-    tl_info(UCC_TL_TEAM_LIB(task->team), "finalizing coll task %p", task);
-    ucc_mc_ee_destroy_event(task->completed, UCC_EE_CUDA_STREAM);
-    ucc_mpool_put(task);
     return status;
 }
 
@@ -164,8 +238,16 @@ ucc_status_t ucc_tl_nccl_coll_init(ucc_base_coll_args_t *coll_args,
     ucc_tl_nccl_team_t    *nccl_team = ucc_derived_of(team, ucc_tl_nccl_team_t);
     ucc_tl_nccl_context_t *nccl_ctx  = ucc_derived_of(team->context,
                                                       ucc_tl_nccl_context_t);
+    ucc_tl_nccl_lib_t     *nccl_lib = ucc_derived_of(nccl_ctx->super.super.lib,
+                                                     ucc_tl_nccl_lib_t);
     ucc_tl_nccl_task_t    *task;
     ucc_status_t status;
+
+    if ((coll_args->args.coll_type == UCC_COLL_TYPE_ALLREDUCE) &&
+        (nccl_lib->cfg.pp_allreduce != 0)) {
+        ucc_tl_nccl_allreduce_schedule_init(coll_args, nccl_team, task_h);
+        return UCC_OK;
+    }
 
     task = ucc_mpool_get(&nccl_ctx->req_mp);
     ucc_coll_task_init(&task->super);

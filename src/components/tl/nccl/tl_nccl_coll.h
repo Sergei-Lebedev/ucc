@@ -8,6 +8,7 @@
 #define UCC_TL_NCCL_COLL_H_
 
 #include "tl_nccl.h"
+#include "schedule/ucc_schedule_pipelined.h"
 
 ucc_status_t ucc_tl_nccl_allgather_init(ucc_tl_nccl_task_t *task);
 
@@ -20,5 +21,11 @@ ucc_status_t ucc_tl_nccl_alltoall_init(ucc_tl_nccl_task_t *task);
 ucc_status_t ucc_tl_nccl_alltoallv_init(ucc_tl_nccl_task_t *task);
 
 ucc_status_t ucc_tl_nccl_bcast_init(ucc_tl_nccl_task_t *task);
+
+ucc_status_t ucc_tl_nccl_allreduce_schedule_init(ucc_base_coll_args_t *coll_args,
+                                                 ucc_tl_nccl_team_t *team,
+                                                 ucc_coll_task_t **task_h);
+
+ucc_status_t ucc_tl_nccl_coll_finalize(ucc_coll_task_t *coll_task);
 
 #endif

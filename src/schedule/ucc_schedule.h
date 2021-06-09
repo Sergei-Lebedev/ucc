@@ -9,7 +9,7 @@
 #include "utils/ucc_list.h"
 #include "utils/ucc_log.h"
 #include "utils/ucc_lock_free_queue.h"
-#define MAX_LISTENERS 4
+#define MAX_LISTENERS 8
 
 typedef enum {
     UCC_EVENT_COMPLETED = 0,
