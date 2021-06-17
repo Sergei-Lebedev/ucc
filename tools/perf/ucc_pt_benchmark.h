@@ -24,9 +24,11 @@ class ucc_pt_benchmark {
 public:
     ucc_pt_benchmark(ucc_pt_benchmark_config cfg, ucc_pt_comm *communcator);
     ucc_status_t run_bench() noexcept;
-    ucc_status_t run_single_test(ucc_coll_args_t args,
-                                 int nwarmup, int niter,
+    ucc_status_t run_single_test(ucc_coll_args_t args, int nwarmup, int niter,
                                  std::chrono::nanoseconds &time) noexcept;
+    ucc_status_t run_batched_test(ucc_coll_args_t args, int nwarmup, int niter,
+                                  int max_outstanding,
+                                  std::chrono::nanoseconds &time) noexcept;
     ~ucc_pt_benchmark();
 };
 

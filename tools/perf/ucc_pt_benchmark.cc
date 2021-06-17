@@ -1,4 +1,5 @@
 #include <iomanip>
+#include <vector>
 #include "ucc_pt_benchmark.h"
 #include "core/ucc_mc.h"
 #include "ucc_perftest.h"
@@ -58,7 +59,13 @@ ucc_status_t ucc_pt_benchmark::run_bench() noexcept
             warmup = config.n_warmup_large;
         }
         UCCCHECK_GOTO(coll->init_coll_args(cnt, args), exit_err, st);
-        UCCCHECK_GOTO(run_single_test(args, warmup, iter, time), free_coll, st);
+        if (config.max_outstanding == 1) {
+            UCCCHECK_GOTO(run_single_test(args, warmup, iter, time), free_coll,
+                          st);
+        } else {
+            UCCCHECK_GOTO(run_batched_test(args, warmup, iter,
+                          config.max_outstanding, time), free_coll, st);
+        }
         coll->free_coll_args(args);
         print_time(cnt, time);
     }
@@ -101,6 +108,95 @@ ucc_status_t ucc_pt_benchmark::run_single_test(ucc_coll_args_t args,
         }
         UCCCHECK_GOTO(comm->barrier(), exit_err, st);
     }
+    if (niter != 0) {
+        time /= niter;
+    }
+    return UCC_OK;
+free_req:
+    ucc_collective_finalize(req);
+exit_err:
+    return st;
+}
+
+
+void ucc_pt_completion_batched(void *data, ucc_status_t status)
+{
+    int *num_outstanding = (int *)data;
+    (*num_outstanding)--;
+}
+
+ucc_status_t ucc_pt_benchmark::run_batched_test(ucc_coll_args_t args,
+                                                int nwarmup, int niter,
+                                                int max_outstanding,
+                                                std::chrono::nanoseconds &time)
+                                                noexcept
+{
+    ucc_team_h    team  = comm->get_team();
+    ucc_context_h ctx   = comm->get_context();
+    ucc_status_t  st    = UCC_OK;
+    int num_outstanding, num_started;
+    std::vector<ucc_coll_req_h> reqs;
+    ucc_coll_req_h req;
+    std::chrono::time_point<std::chrono::high_resolution_clock> s, f;
+
+    UCCCHECK_GOTO(comm->barrier(), exit_err, st);
+    time = std::chrono::nanoseconds::zero();
+    for (int i = 0; i < nwarmup; i++) {
+        UCCCHECK_GOTO(ucc_collective_init(&args, &req, team), exit_err, st);
+        UCCCHECK_GOTO(ucc_collective_post(req), free_req, st);
+        st = ucc_collective_test(req);
+        while (st == UCC_INPROGRESS) {
+            UCCCHECK_GOTO(ucc_context_progress(ctx), free_req, st);
+            st = ucc_collective_test(req);
+        }
+        ucc_collective_finalize(req);
+        if (st != UCC_OK) {
+            goto exit_err;
+        }
+        UCCCHECK_GOTO(comm->barrier(), exit_err, st);
+    }
+
+    max_outstanding = ucc_min(max_outstanding, niter);
+    reqs.resize(max_outstanding);
+    args.mask |= UCC_COLL_ARGS_FIELD_CB;
+    args.cb.cb = ucc_pt_completion_batched;
+    args.cb.data = &num_outstanding;
+
+    num_outstanding = max_outstanding;
+    num_started     = max_outstanding;
+    s = std::chrono::high_resolution_clock::now();
+    for (int i = 0; i < max_outstanding; i++) {
+        UCCCHECK_GOTO(ucc_collective_init(&args, &reqs[i], team), exit_err, st);
+        UCCCHECK_GOTO(ucc_collective_post(reqs[i]), exit_err, st);
+    }
+
+    while (num_started < niter) {
+        do {
+            UCCCHECK_GOTO(ucc_context_progress(ctx), free_req, st);
+        } while (num_outstanding == max_outstanding);
+
+        for (int i = 0; i < reqs.size() && num_started < niter; i++) {
+            st = ucc_collective_test(reqs[i]);
+            if (st != UCC_INPROGRESS) {
+                ucc_collective_finalize(reqs[i]);
+                num_started++;
+                num_outstanding++;
+                UCCCHECK_GOTO(ucc_collective_init(&args, &reqs[i], team),
+                              exit_err, st);
+                UCCCHECK_GOTO(ucc_collective_post(reqs[i]), exit_err, st);
+            }
+        }
+    }
+
+    do {
+        UCCCHECK_GOTO(ucc_context_progress(ctx), free_req, st);
+    } while (num_outstanding != 0);
+    for (auto r = reqs.begin(); r != reqs.end(); r++) {
+        ucc_collective_finalize(*r);
+    }
+    f = std::chrono::high_resolution_clock::now();
+    time = std::chrono::duration_cast<std::chrono::nanoseconds>(f - s);
+
     if (niter != 0) {
         time /= niter;
     }

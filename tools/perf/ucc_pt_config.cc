@@ -1,19 +1,20 @@
 #include "ucc_pt_config.h"
 
 ucc_pt_config::ucc_pt_config() {
-    bootstrap.bootstrap  = UCC_PT_BOOTSTRAP_MPI;
-    bench.coll_type      = UCC_COLL_TYPE_ALLREDUCE;
-    bench.min_count      = 128;
-    bench.max_count      = 128;
-    bench.dt             = UCC_DT_FLOAT32;
-    bench.mt             = UCC_MEMORY_TYPE_HOST;
-    bench.op             = UCC_OP_SUM;
-    bench.inplace        = false;
-    bench.n_iter_small   = 1000;
-    bench.n_warmup_small = 100;
-    bench.n_iter_large   = 200;
-    bench.n_warmup_large = 20;
-    bench.large_thresh   = 64 * 1024;
+    bootstrap.bootstrap   = UCC_PT_BOOTSTRAP_MPI;
+    bench.coll_type       = UCC_COLL_TYPE_ALLREDUCE;
+    bench.min_count       = 128;
+    bench.max_count       = 128;
+    bench.dt              = UCC_DT_FLOAT32;
+    bench.mt              = UCC_MEMORY_TYPE_HOST;
+    bench.op              = UCC_OP_SUM;
+    bench.inplace         = false;
+    bench.n_iter_small    = 1000;
+    bench.n_warmup_small  = 100;
+    bench.n_iter_large    = 200;
+    bench.n_warmup_large  = 20;
+    bench.large_thresh    = 64 * 1024;
+    bench.max_outstanding = 1;
 }
 
 const std::map<std::string, ucc_reduction_op_t> ucc_pt_op_map = {
@@ -57,7 +58,7 @@ ucc_status_t ucc_pt_config::process_args(int argc, char *argv[])
 {
     int c;
 
-    while ((c = getopt(argc, argv, "c:b:e:d:m:n:w:o:ih")) != -1) {
+    while ((c = getopt(argc, argv, "c:b:e:d:m:n:w:o:O:ih")) != -1) {
         switch (c) {
             case 'c':
                 if (ucc_pt_coll_map.count(optarg) == 0) {
@@ -105,6 +106,9 @@ ucc_status_t ucc_pt_config::process_args(int argc, char *argv[])
             case 'i':
                 bench.inplace = true;
                 break;
+            case 'O':
+                std::stringstream(optarg) >> bench.max_outstanding;
+                break;
             case 'h':
             default:
                 print_help();
@@ -126,6 +130,7 @@ void ucc_pt_config::print_help()
     std::cout << "  -m <mtype name>: memory type"<<std::endl;
     std::cout << "  -n <number>: number of iterations"<<std::endl;
     std::cout << "  -w <number>: number of warmup iterations"<<std::endl;
+    std::cout << "  -O <number>: max number of outstanding collectives"<<std::endl;
     std::cout << "  -h: show this help message"<<std::endl;
     std::cout << std::endl;
 }

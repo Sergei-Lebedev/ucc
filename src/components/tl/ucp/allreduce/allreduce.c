@@ -42,6 +42,8 @@ ucc_status_t ucc_tl_ucp_allreduce_knomial_init(ucc_base_coll_args_t *coll_args,
     ALLREDUCE_TASK_CHECK(coll_args->args, tl_team);
     task                 = ucc_tl_ucp_init_task(coll_args, team);
     *task_h              = &task->super;
+    tl_info(team->context->lib, "init coll req ar %p", task);
+
     status = ucc_tl_ucp_allreduce_knomial_init_common(task);
 out:
     return status;
