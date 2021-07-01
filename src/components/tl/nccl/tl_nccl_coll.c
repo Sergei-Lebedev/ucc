@@ -56,13 +56,30 @@ static inline ucc_status_t ucc_nccl_check_dt_supported(ucc_datatype_t dt1,
     return UCC_OK;
 }
 
-ucc_status_t ucc_tl_nccl_collective_progress(ucc_coll_task_t *coll_task)
+ucc_status_t ucc_tl_nccl_collective_sync(ucc_tl_nccl_task_t *task,
+                                         cudaStream_t stream)
 {
-    ucc_tl_nccl_task_t *task = ucc_derived_of(coll_task, ucc_tl_nccl_task_t);
-    ucc_status_t status;
+    ucc_tl_nccl_context_t *ctx  = ucc_derived_of(task->team->super.super.context,
+                                                 ucc_tl_nccl_context_t);
+    ucc_status_t status = UCC_OK;
+    CUresult cu_status;
 
-    status = ucc_mc_ee_event_test(task->completed, UCC_EE_CUDA_STREAM);
-    coll_task->super.status = status;
+    if (ctx->cfg.sync_type == UCC_TL_NCCL_COMPLETION_SYNC_TYPE_EVENT) {
+        status = ucc_mc_ee_event_post(stream, task->completed,
+                                      UCC_EE_CUDA_STREAM);
+        if (status == UCC_OK) {
+            ucc_progress_enqueue(UCC_TL_CORE_CTX(task->team)->pq, &task->super);
+        } else if (status < 0) {
+            task->super.super.status = status;
+        }
+    } else {
+        task->completed = NULL;
+        cu_status = cuStreamWriteValue32(stream, (CUdeviceptr)task->dev_status,
+                                         UCC_OK, 0);
+        if (cu_status != CUDA_SUCCESS) {
+            status = UCC_ERR_NO_MESSAGE;
+        }
+    }
     return status;
 }
 
@@ -96,13 +113,8 @@ ucc_status_t ucc_tl_nccl_alltoall_start(ucc_coll_task_t *coll_task)
                        exit_coll, status, UCC_TL_TEAM_LIB(team));
     }
     NCCLCHECK_GOTO(ncclGroupEnd(), exit_coll, status, UCC_TL_TEAM_LIB(team));
-    status = ucc_mc_ee_event_post(stream, task->completed, UCC_EE_CUDA_STREAM);
+    status = ucc_tl_nccl_collective_sync(task, stream);
 exit_coll:
-    if (status == UCC_OK) {
-        ucc_progress_enqueue(UCC_TL_CORE_CTX(team)->pq, &task->super);
-    } else if (status < 0) {
-        task->super.super.status = status;
-    }
     return status;
 }
 
@@ -120,7 +132,6 @@ ucc_status_t ucc_tl_nccl_alltoall_init(ucc_tl_nccl_task_t *task)
         return UCC_ERR_NOT_SUPPORTED;
     }
     task->super.post     = ucc_tl_nccl_alltoall_start;
-    task->super.progress = ucc_tl_nccl_collective_progress;
     return UCC_OK;
 }
 
@@ -163,13 +174,8 @@ ucc_status_t ucc_tl_nccl_alltoallv_start(ucc_coll_task_t *coll_task)
         }
     }
     NCCLCHECK_GOTO(ncclGroupEnd(), exit_coll, status, UCC_TL_TEAM_LIB(team));
-    status = ucc_mc_ee_event_post(stream, task->completed, UCC_EE_CUDA_STREAM);
+    status = ucc_tl_nccl_collective_sync(task, stream);
 exit_coll:
-    if (status == UCC_OK) {
-        ucc_progress_enqueue(UCC_TL_CORE_CTX(team)->pq, &task->super);
-    } else if (status < 0) {
-        task->super.super.status = status;
-    }
     return status;
 }
 
@@ -187,7 +193,6 @@ ucc_status_t ucc_tl_nccl_alltoallv_init(ucc_tl_nccl_task_t *task)
         return UCC_ERR_NOT_SUPPORTED;
     }
     task->super.post     = ucc_tl_nccl_alltoallv_start;
-    task->super.progress = ucc_tl_nccl_collective_progress;
     return UCC_OK;
 }
 
@@ -212,13 +217,8 @@ ucc_status_t ucc_tl_nccl_allreduce_start(ucc_coll_task_t *coll_task)
     NCCLCHECK_GOTO(ncclAllReduce(src, dst, count, dt, op, team->nccl_comm,
                                  stream),
                    exit_coll, status, UCC_TL_TEAM_LIB(team));
-    status = ucc_mc_ee_event_post(stream, task->completed, UCC_EE_CUDA_STREAM);
+    status = ucc_tl_nccl_collective_sync(task, stream);
 exit_coll:
-    if (status == UCC_OK) {
-        ucc_progress_enqueue(UCC_TL_CORE_CTX(team)->pq, &task->super);
-    } else if (status < 0) {
-        task->super.super.status = status;
-    }
     return status;
 }
 
@@ -238,7 +238,6 @@ ucc_status_t ucc_tl_nccl_allreduce_init(ucc_tl_nccl_task_t *task)
         return UCC_ERR_NOT_SUPPORTED;
     }
     task->super.post     = ucc_tl_nccl_allreduce_start;
-    task->super.progress = ucc_tl_nccl_collective_progress;
     return UCC_OK;
 }
 
@@ -262,13 +261,8 @@ ucc_status_t ucc_tl_nccl_allgather_start(ucc_coll_task_t *coll_task)
     task->super.super.status = UCC_INPROGRESS;
     NCCLCHECK_GOTO(ncclAllGather(src, dst, count, dt, team->nccl_comm, stream),
                    exit_coll, status, UCC_TL_TEAM_LIB(team));
-    status = ucc_mc_ee_event_post(stream, task->completed, UCC_EE_CUDA_STREAM);
+    status = ucc_tl_nccl_collective_sync(task, stream);
 exit_coll:
-    if (status == UCC_OK) {
-        ucc_progress_enqueue(UCC_TL_CORE_CTX(team)->pq, &task->super);
-    } else if (status < 0) {
-        task->super.super.status = status;
-    }
     return status;
 }
 
@@ -286,7 +280,6 @@ ucc_status_t ucc_tl_nccl_allgather_init(ucc_tl_nccl_task_t *task)
         return UCC_ERR_NOT_SUPPORTED;
     }
     task->super.post     = ucc_tl_nccl_allgather_start;
-    task->super.progress = ucc_tl_nccl_collective_progress;
     return UCC_OK;
 }
 
@@ -327,13 +320,8 @@ ucc_status_t ucc_tl_nccl_allgatherv_start(ucc_coll_task_t *coll_task)
         }
     }
     NCCLCHECK_GOTO(ncclGroupEnd(), exit_coll, status, UCC_TL_TEAM_LIB(team));
-    status = ucc_mc_ee_event_post(stream, task->completed, UCC_EE_CUDA_STREAM);
+    status = ucc_tl_nccl_collective_sync(task, stream);
 exit_coll:
-    if (status == UCC_OK) {
-        ucc_progress_enqueue(UCC_TL_CORE_CTX(team)->pq, &task->super);
-    } else if (status < 0) {
-        task->super.super.status = status;
-    }
     return status;
 }
 
@@ -351,7 +339,6 @@ ucc_status_t ucc_tl_nccl_allgatherv_init(ucc_tl_nccl_task_t *task)
         return UCC_ERR_NOT_SUPPORTED;
     }
     task->super.post     = ucc_tl_nccl_allgatherv_start;
-    task->super.progress = ucc_tl_nccl_collective_progress;
     return UCC_OK;
 }
 
@@ -372,13 +359,8 @@ ucc_status_t ucc_tl_nccl_bcast_start(ucc_coll_task_t *coll_task)
     NCCLCHECK_GOTO(ncclBroadcast(src, src, count, dt, root, team->nccl_comm,
                                  stream),
                    exit_coll, status, UCC_TL_TEAM_LIB(team));
-    status = ucc_mc_ee_event_post(stream, task->completed, UCC_EE_CUDA_STREAM);
+    status = ucc_tl_nccl_collective_sync(task, stream);
 exit_coll:
-    if (status == UCC_OK) {
-        ucc_progress_enqueue(UCC_TL_CORE_CTX(team)->pq, &task->super);
-    } else if (status < 0) {
-        task->super.super.status = status;
-    }
     return status;
 }
 
@@ -392,6 +374,5 @@ ucc_status_t ucc_tl_nccl_bcast_init(ucc_tl_nccl_task_t *task)
         return UCC_ERR_NOT_SUPPORTED;
     }
     task->super.post     = ucc_tl_nccl_bcast_start;
-    task->super.progress = ucc_tl_nccl_collective_progress;
     return UCC_OK;
 }
