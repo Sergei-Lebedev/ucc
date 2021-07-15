@@ -53,4 +53,7 @@ static inline unsigned long ucc_str_hash_djb2(const char *str)
     return hash;
 }
 
+/* Sorts the input integer array in-place keeping only
+   unique elements */
+int ucc_sort_uniq(int *array, int len, int inverse);
 #endif
