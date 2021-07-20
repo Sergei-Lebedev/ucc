@@ -133,6 +133,7 @@ ucc_tl_ucp_init_task(ucc_base_coll_args_t *coll_args, ucc_base_team_t *team)
     task->super.finalize = ucc_tl_ucp_coll_finalize;
     task->super.triggered_post = ucc_tl_ucp_triggered_post;
     task->super.early_triggered_post = NULL;
+    task->super.early_triggered_post_status = NULL;
     return task;
 }
 

@@ -98,7 +98,12 @@ ucc_status_t ucc_tl_ucp_alltoallv_pairwise_progress(ucc_coll_task_t *coll_task)
     if ((task->send_posted < gsize) || (task->recv_posted < gsize)) {
         return task->super.super.status;
     }
-    task->super.super.status = ucc_tl_ucp_test(task);
+    if ((ucc_tl_ucp_test(task) == UCC_OK) &&
+        (ucc_mc_ee_event_test(task->super.early_triggered_post_status, UCC_EE_CUDA_STREAM) == UCC_OK)) {
+        task->super.super.status = UCC_OK;
+    } else {
+        task->super.super.status = UCC_INPROGRESS;
+    }
 out:
     if (task->super.super.status != UCC_INPROGRESS) {
         UCC_TL_UCP_PROFILE_REQUEST_EVENT(coll_task,
@@ -134,6 +139,7 @@ ucc_status_t ucc_tl_ucp_alltoallv_pairwise_early_triggered_post(ucc_coll_task_t 
     size_t   sdt_size, data_size, data_displ, ipc_thresh;
     int rank, j, peer;
     ptrdiff_t dst;
+    ucc_status_t status;
 
     task->alltoall_intra.n = 0;
     if (task->alltoall_intra.info == NULL) {
@@ -169,12 +175,24 @@ ucc_status_t ucc_tl_ucp_alltoallv_pairwise_early_triggered_post(ucc_coll_task_t 
 
         //printf("SNED [%d: %d] sdispl:%ld rdispl:(%ld:%ld) size:%ld \n", team->rank, rank, data_displ, peer_info->offset, peer_info->displ[intra_rank], data_size);
         if (data_size != 0) {
-            CUDACHECK(cudaMemcpyAsync((void *)dst, (void *)(sbuf + data_displ), data_size, cudaMemcpyDeviceToDevice, (cudaStream_t)coll_task->ee->ee_context));
+            CUDACHECK(cudaMemcpyAsync((void *)dst, (void *)(sbuf + data_displ), data_size,
+                                      cudaMemcpyDeviceToDevice, (cudaStream_t)coll_task->ee->ee_context));
         }
         task->alltoall_intra.n++;
     }
+    status = ucc_mc_ee_create_event(&task->super.early_triggered_post_status,
+                                    UCC_EE_CUDA_STREAM);
+    if (status != UCC_OK) {
+        fprintf(stderr, "failed to create eary triggered task completion event\n");
+    }
+    status = ucc_mc_ee_event_post(coll_task->ee->ee_context,
+                                  task->super.early_triggered_post_status,
+                                  UCC_EE_CUDA_STREAM);
+    if (status != UCC_OK) {
+        fprintf(stderr, "failed to post triggered task completion event\n");
+    }
 
-    return UCC_OK;
+    return status;
 }
 
 ucc_status_t ucc_tl_ucp_alltoallv_pairwise_init_common(ucc_tl_ucp_task_t *task)
@@ -228,8 +246,6 @@ ucc_status_t ucc_tl_ucp_alltoallv_pairwise_init_common(ucc_tl_ucp_task_t *task)
         __sync_synchronize();
         asm volatile("": : :"memory");
         my_info->seq_num = (task->tag + 1);
-
-        //printf("[%d] intra_rank_start: %d intra_rank_end:%d", team->rank, intra_rank_start, intra_rank_end);
 
         for (j = 0; j < NODE_GROUP_SIZE; j++) {
             volatile mem_info_t *pi = peer_info;

@@ -46,12 +46,13 @@ typedef struct ucc_coll_task {
     ucc_coll_req_t               super;
     uint32_t                     flags;
     ucc_coll_post_fn_t           post;
-    ucc_coll_post_fn_t           early_triggered_post;;
+    ucc_coll_post_fn_t           early_triggered_post;
     ucc_coll_triggered_post_fn_t triggered_post;
     ucc_coll_finalize_fn_t       finalize;
     ucc_coll_callback_t          cb;
     ucc_event_manager_t          em;
     ucc_status_t               (*progress)(struct ucc_coll_task *self);
+    void                        *early_triggered_post_status;
     struct ucc_schedule         *schedule;
     ucc_ee_h                     ee;
     ucc_ev_t                    *ev;
