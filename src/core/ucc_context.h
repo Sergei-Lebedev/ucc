@@ -62,6 +62,7 @@ typedef struct ucc_context {
     ucc_addr_storage_t       addr_storage;
     ucc_rank_t               rank; /*< rank of a process in the "global" (with
                                      OOB) context */
+    uint64_t                 cl_flags;
 } ucc_context_t;
 
 typedef struct ucc_context_config {

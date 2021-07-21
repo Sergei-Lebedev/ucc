@@ -449,6 +449,8 @@ ucc_status_t ucc_context_create(ucc_lib_h lib,
 {
     ucc_base_context_params_t  b_params;
     ucc_base_context_t        *b_ctx;
+    ucc_context_addr_header_t *h;
+    ucc_base_lib_attr_t        attr;
     ucc_cl_lib_t              *cl_lib;
     ucc_context_t             *ctx;
     ucc_status_t               status;
@@ -489,6 +491,7 @@ ucc_status_t ucc_context_create(ucc_lib_h lib,
         goto error_ctx;
     }
     ctx->n_cl_ctx = 0;
+    ctx->cl_flags = 0;
     for (i = 0; i < num_cls; i++) {
         cl_lib = config->configs[i]->cl_lib;
         status = cl_lib->iface->context.create(
@@ -506,6 +509,12 @@ ucc_status_t ucc_context_create(ucc_lib_h lib,
         }
         ctx->cl_ctx[ctx->n_cl_ctx] = ucc_derived_of(b_ctx, ucc_cl_context_t);
         ctx->n_cl_ctx++;
+        status = cl_lib->iface->lib.get_attr(&cl_lib->super, &attr);
+        if (UCC_OK != status) {
+            ucc_error("failed to query lib %s attr", cl_lib->iface->super.name);
+            goto error_ctx_create;
+        }
+        ctx->cl_flags |= attr.flags;
     }
     if (0 == ctx->n_cl_ctx) {
         ucc_error("no CL context created in ucc_context_create");
