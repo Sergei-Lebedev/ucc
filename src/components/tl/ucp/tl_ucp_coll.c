@@ -126,6 +126,13 @@ static ucc_status_t ucc_tl_ucp_ee_wait_for_event_trigger(ucc_coll_task_t *coll_t
     }
 
     if (task->super.ee_task == NULL) {
+        status = ucc_mc_ee_task_enqueue(task->super.ee->ee_context,
+                                        task->super.ee->ee_type, &task->super.ee_task);
+        if (ucc_unlikely(status != UCC_OK)) {
+            tl_error(task->team->super.super.context->lib, "error in ee task enqueue");
+            task->super.super.status = status;
+            return status;
+        }
 /*
 * run early triggered post if it's there
 * currently only alltoallv supports it and skip for all other collectives
@@ -135,8 +142,7 @@ static ucc_status_t ucc_tl_ucp_ee_wait_for_event_trigger(ucc_coll_task_t *coll_t
             status = coll_task->triggered_task->early_triggered_post(coll_task->triggered_task);
             assert(status == UCC_OK);
         }
-        status = ucc_mc_ee_task_post(task->super.ee->ee_context,
-                                     task->super.ee->ee_type, &task->super.ee_task);
+        status = ucc_mc_ee_task_sync(task->super.ee_task, task->super.ee->ee_type);
         if (ucc_unlikely(status != UCC_OK)) {
             tl_error(task->team->super.super.context->lib, "error in ee task post");
             task->super.super.status = status;

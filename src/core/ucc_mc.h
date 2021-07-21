@@ -30,6 +30,11 @@ ucc_status_t ucc_mc_finalize();
 ucc_status_t ucc_mc_ee_task_post(void *ee_context, ucc_ee_type_t ee_type,
                                  void **ee_task);
 
+ucc_status_t ucc_mc_ee_task_enqueue(void *ee_context, ucc_ee_type_t ee_type,
+                                    void **ee_task);
+
+ucc_status_t ucc_mc_ee_task_sync(void *ee_task, ucc_ee_type_t ee_type);
+
 ucc_status_t ucc_mc_ee_task_query(void *ee_task, ucc_ee_type_t ee_type);
 
 ucc_status_t ucc_mc_ee_task_end(void *ee_task, ucc_ee_type_t ee_type);

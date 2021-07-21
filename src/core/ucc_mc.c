@@ -224,6 +224,19 @@ ucc_status_t ucc_mc_ee_task_post(void *ee_context, ucc_ee_type_t ee_type,
     return ee_ops[ee_type]->ee_task_post(ee_context, ee_task);
 }
 
+ucc_status_t ucc_mc_ee_task_enqueue(void *ee_context, ucc_ee_type_t ee_type,
+                                    void **ee_task)
+{
+    UCC_CHECK_EE_AVAILABLE(ee_type);
+    return ee_ops[ee_type]->ee_task_enqueue(ee_context, ee_task);
+}
+
+ucc_status_t ucc_mc_ee_task_sync(void *ee_task, ucc_ee_type_t ee_type)
+{
+    UCC_CHECK_EE_AVAILABLE(ee_type);
+    return ee_ops[ee_type]->ee_task_sync(ee_task);
+}
+
 ucc_status_t ucc_mc_ee_task_query(void *ee_task, ucc_ee_type_t ee_type)
 {
     UCC_CHECK_EE_AVAILABLE(ee_type);
