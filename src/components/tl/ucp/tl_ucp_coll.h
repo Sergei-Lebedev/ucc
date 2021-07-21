@@ -57,6 +57,7 @@ typedef struct ucc_tl_ucp_task {
         struct {
             void                   *info;
             void                   *peer_map_addr[8];
+            uint32_t                coll_id;
             uint32_t                n;
         } alltoall_intra;
     };

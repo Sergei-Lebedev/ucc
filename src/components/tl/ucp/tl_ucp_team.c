@@ -88,6 +88,8 @@ ucc_status_t ucc_tl_ucp_team_create_test(ucc_base_team_t *tl_team)
     ucc_tl_ucp_team_t    *team = ucc_derived_of(tl_team, ucc_tl_ucp_team_t);
     ucc_tl_ucp_context_t *ctx  = UCC_TL_UCP_TEAM_CTX(team);
     ucc_status_t          status;
+    int i, j;
+
     if (team->status == UCC_OK) {
         return UCC_OK;
     }
@@ -118,6 +120,19 @@ ucc_status_t ucc_tl_ucp_team_create_test(ucc_base_team_t *tl_team)
                 return UCC_ERR_NO_MESSAGE;
             }
         }
+
+        for (i = 0; i < MAX_ALLTOALLV_CONCURRENT; i++) {
+            CUDACHECK(cudaEventCreateWithFlags(&team->event[i], cudaEventDisableTiming | cudaEventInterprocess));
+            CUDACHECK(cudaIpcGetEventHandle((cudaIpcEventHandle_t *)&team->ipc_event_handle[i], team->event[i]));
+
+        }
+
+        for (i = 0; i < NODE_GROUP_SIZE; i++) {
+            for (j = 0; j < MAX_ALLTOALLV_CONCURRENT; j++) {
+                team->ipc_event[i][j] = (cudaEvent_t) NULL;
+            }
+        }
+
         void *req;
         status = team->oob.allgather(&shm_id, shm_ids, sizeof(int), team->oob.coll_info, &req);
         ucc_assert(UCC_OK == status);
