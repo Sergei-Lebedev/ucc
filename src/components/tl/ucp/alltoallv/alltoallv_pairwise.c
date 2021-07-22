@@ -151,10 +151,10 @@ ucs_status_t ucc_tl_ucp_alltoallv_cuda_ipc_setup(ucc_coll_task_t *coll_task)
 
     if (base_address != NULL) {
         CUDACHECK(cudaIpcGetMemHandle((cudaIpcMemHandle_t *) &my_info->handle, base_address));
-        CUDACHECK(cudaEventRecord(team->event[coll_id], (cudaStream_t)coll_task->ee->ee_context));
-        my_info->ev_handle = team->ipc_event_handle[coll_id];
     }
 
+    CUDACHECK(cudaEventRecord(team->event[coll_id], (cudaStream_t)coll_task->ee->ee_context));
+    my_info->ev_handle = team->ipc_event_handle[coll_id];
     my_info->d_ptr  = base_address;
     my_info->size   = alloc_length;
     my_info->offset = task->args.src.info_v.buffer - base_address;
@@ -185,14 +185,16 @@ ucs_status_t ucc_tl_ucp_alltoallv_cuda_ipc_setup(ucc_coll_task_t *coll_task)
             }
             ucc_assert(j < INTRA_PPN);
             task->alltoall_intra.peer_map_addr[j] = mapped_addr;
-            task->alltoall_intra.coll_id          = coll_id;
+        }
 
+        if(i != team->rank) {
             if (team->ipc_event[j][coll_id] == (cudaEvent_t) NULL) {
                 CUDACHECK(cudaIpcOpenEventHandle(&team->ipc_event[j][coll_id], peer_info[j].ev_handle));
             }
         }
     }
 
+    task->alltoall_intra.coll_id  = coll_id;
     task->alltoall_intra.info = peer_info;
 
     return UCC_OK;
@@ -207,7 +209,8 @@ ucc_status_t ucc_tl_ucp_alltoallv_pairwise_early_triggered_post(ucc_coll_task_t 
     ucc_rank_t intra_rank_end   = ucs_min(intra_rank_start + INTRA_PPN, team->size) - 1;
     ucc_rank_t intra_rank       = team->rank - intra_rank_start;
     size_t   rdt_size, data_size, data_displ, ipc_thresh;
-    int rank, j, peer;
+    int rank, i, j, peer;
+    mem_info_t *peer_info, *my_info;
     ptrdiff_t src;
 
     task->alltoall_intra.n = 0;
@@ -224,7 +227,7 @@ ucc_status_t ucc_tl_ucp_alltoallv_pairwise_early_triggered_post(ucc_coll_task_t 
             rank = intra_rank_start - 1 + ((rank - intra_rank_end) % INTRA_PPN);
         }
         peer = rank - intra_rank_start;
-        mem_info_t *peer_info = &((mem_info_t *)task->alltoall_intra.info)[peer];
+        peer_info = &((mem_info_t *)task->alltoall_intra.info)[peer];
 
 
         if (rank == team->rank) {
@@ -253,6 +256,28 @@ ucc_status_t ucc_tl_ucp_alltoallv_pairwise_early_triggered_post(ucc_coll_task_t 
         }
         task->alltoall_intra.n++;
     }
+
+    peer_info = &team->a2av[NODE_GROUP_SIZE * task->alltoall_intra.coll_id];
+    my_info = &peer_info[NODE_RANK(team)];
+
+    CUDACHECK(cudaEventRecord(team->event[task->alltoall_intra.coll_id], (cudaStream_t)coll_task->ee->ee_context));
+
+    __sync_synchronize();
+    asm volatile("": : :"memory");
+    my_info->seq_num = (task->tag + 2);
+
+    for (j = 0; j < NODE_GROUP_SIZE; j++) {
+        volatile mem_info_t *pi = peer_info;
+        while (pi[j].seq_num != (task->tag + 2));
+    }
+
+    for (i=intra_rank_start,j = 0 ; i <= intra_rank_end; i++, j++) {
+        peer_info = &((mem_info_t *)task->alltoall_intra.info)[j];
+        if (i != team->rank) {
+            CUDACHECK(cudaStreamWaitEvent((cudaStream_t)coll_task->ee->ee_context, team->ipc_event[j][task->alltoall_intra.coll_id], 0));
+        }
+    }
+
 
     return UCC_OK;
 }
