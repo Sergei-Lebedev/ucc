@@ -146,8 +146,8 @@ ucs_status_t ucc_tl_ucp_alltoallv_cuda_ipc_setup(ucc_coll_task_t *coll_task)
     rdt_size = ucc_dt_size(task->args.dst.info_v.datatype);
     sdt_size = ucc_dt_size(task->args.src.info_v.datatype);
 
-    total_counts = ucc_coll_args_get_total_count(&task->args, task->args.dst.info_v.counts, team->size);
-    ucc_tl_ucp_get_alloc_info(task->args.dst.info_v.buffer, total_counts * rdt_size,  &base_address, &alloc_length);
+    total_counts = ucc_coll_args_get_total_count(&task->args, task->args.src.info_v.counts, team->size);
+    ucc_tl_ucp_get_alloc_info(task->args.src.info_v.buffer, total_counts * sdt_size,  &base_address, &alloc_length);
 
     if (base_address != NULL) {
         CUDACHECK(cudaIpcGetMemHandle((cudaIpcMemHandle_t *) &my_info->handle, base_address));
@@ -157,11 +157,11 @@ ucs_status_t ucc_tl_ucp_alltoallv_cuda_ipc_setup(ucc_coll_task_t *coll_task)
 
     my_info->d_ptr  = base_address;
     my_info->size   = alloc_length;
-    my_info->offset = task->args.dst.info_v.buffer - base_address;
+    my_info->offset = task->args.src.info_v.buffer - base_address;
 
     for (i = intra_rank_start, j = 0; i <= intra_rank_end; i++, j++) {
         my_info->displ[j] =  ucc_coll_args_get_displacement(&task->args,
-                task->args.dst.info_v.displacements,i) * rdt_size;
+                task->args.src.info_v.displacements,i) * sdt_size;
     }
 
     __sync_synchronize();
@@ -174,8 +174,8 @@ ucs_status_t ucc_tl_ucp_alltoallv_cuda_ipc_setup(ucc_coll_task_t *coll_task)
     }
     for (i=intra_rank_start,j = 0 ; i <= intra_rank_end; i++, j++) {
         if (i != team->rank && peer_info[j].d_ptr &&
-                (ucc_coll_args_get_count(&task->args, task->args.src.info_v.counts, i) *
-                 sdt_size) >= ipc_thresh) {
+                (ucc_coll_args_get_count(&task->args, task->args.dst.info_v.counts, i) *
+                 rdt_size) >= ipc_thresh) {
             status = ucc_cuda_ipc_map_memhandle(peer_info[j].d_ptr, peer_info[j].size,
                     peer_info[j].handle, &mapped_addr,
                     UCC_TL_UCP_TEAM_CTX(team)->ipc_cache[j]);
@@ -202,13 +202,13 @@ ucc_status_t ucc_tl_ucp_alltoallv_pairwise_early_triggered_post(ucc_coll_task_t 
 {
     ucc_tl_ucp_task_t *task = ucc_derived_of(coll_task, ucc_tl_ucp_task_t);
     ucc_tl_ucp_team_t *team = task->team;
-    ptrdiff_t          sbuf  = (ptrdiff_t)task->args.src.info_v.buffer;
+    ptrdiff_t          rbuf  = (ptrdiff_t)task->args.dst.info_v.buffer;
     ucc_rank_t intra_rank_start = ucs_align_down(team->rank, INTRA_PPN);
     ucc_rank_t intra_rank_end   = ucs_min(intra_rank_start + INTRA_PPN, team->size) - 1;
     ucc_rank_t intra_rank       = team->rank - intra_rank_start;
-    size_t   sdt_size, data_size, data_displ, ipc_thresh;
+    size_t   rdt_size, data_size, data_displ, ipc_thresh;
     int rank, j, peer;
-    ptrdiff_t dst;
+    ptrdiff_t src;
 
     task->alltoall_intra.n = 0;
     if (!UCC_TL_UCP_TEAM_CTX(team)->cfg.alltoall_use_ipc) {
@@ -217,7 +217,7 @@ ucc_status_t ucc_tl_ucp_alltoallv_pairwise_early_triggered_post(ucc_coll_task_t 
     ucc_tl_ucp_alltoallv_cuda_ipc_setup(coll_task);
 
     ipc_thresh = UCC_TL_UCP_TEAM_CTX(team)->cfg.alltoallv_ipc_thresh;
-    sdt_size = ucc_dt_size(task->args.src.info_v.datatype);
+    rdt_size = ucc_dt_size(task->args.dst.info_v.datatype);
     for (j=0; j < INTRA_PPN; j++) {
         rank = team->rank + j;
         if (rank > intra_rank_end) {
@@ -228,20 +228,20 @@ ucc_status_t ucc_tl_ucp_alltoallv_pairwise_early_triggered_post(ucc_coll_task_t 
 
 
         if (rank == team->rank) {
-            dst = (ptrdiff_t)task->args.dst.info_v.buffer +
+            src = (ptrdiff_t)task->args.src.info_v.buffer +
                     + peer_info->displ[intra_rank];
         } else {
-            dst = (ptrdiff_t) task->alltoall_intra.peer_map_addr[peer] +
+            src = (ptrdiff_t) task->alltoall_intra.peer_map_addr[peer] +
                     peer_info->offset + peer_info->displ[intra_rank];
         }
 
         data_size  = ucc_coll_args_get_count(&task->args,
-                            task->args.src.info_v.counts, rank) * sdt_size;
+                            task->args.dst.info_v.counts, rank) * rdt_size;
         if (data_size < ipc_thresh) {
             continue;
         }
         data_displ = ucc_coll_args_get_displacement(&task->args,
-                            task->args.src.info_v.displacements, rank)* sdt_size;
+                            task->args.dst.info_v.displacements, rank)* rdt_size;
 
         //printf("SNED [%d: %d] sdispl:%ld rdispl:(%ld:%ld) size:%ld \n", team->rank, rank, data_displ, peer_info->offset, peer_info->displ[intra_rank], data_size);
         if (data_size != 0) {
@@ -249,7 +249,7 @@ ucc_status_t ucc_tl_ucp_alltoallv_pairwise_early_triggered_post(ucc_coll_task_t 
                 CUDACHECK(cudaStreamWaitEvent((cudaStream_t)coll_task->ee->ee_context,
                                 team->ipc_event[peer][task->alltoall_intra.coll_id], 0));
             }
-            CUDACHECK(cudaMemcpyAsync((void *)dst, (void *)(sbuf + data_displ), data_size, cudaMemcpyDeviceToDevice, (cudaStream_t)coll_task->ee->ee_context));
+            CUDACHECK(cudaMemcpyAsync((void *)(rbuf + data_displ), (void *)src, data_size, cudaMemcpyDeviceToDevice, (cudaStream_t)coll_task->ee->ee_context));
         }
         task->alltoall_intra.n++;
     }
