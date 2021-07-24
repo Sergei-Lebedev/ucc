@@ -64,6 +64,9 @@ typedef struct ucc_coll_task {
         /* used for lf mt progress queue */
         ucc_lf_queue_elem_t          lf_elem;
     };
+    uint8_t n_deps;
+    uint8_t n_deps_satisfied;
+    uint8_t n_deps_base;
 } ucc_coll_task_t;
 
 typedef struct ucc_context ucc_context_t;
