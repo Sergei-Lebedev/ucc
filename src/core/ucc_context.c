@@ -458,7 +458,6 @@ ucc_status_t ucc_context_create(ucc_lib_h lib,
 {
     ucc_base_context_params_t  b_params;
     ucc_base_context_t        *b_ctx;
-    ucc_context_addr_header_t *h;
     ucc_base_lib_attr_t        attr;
     ucc_cl_lib_t              *cl_lib;
     ucc_context_t             *ctx;
