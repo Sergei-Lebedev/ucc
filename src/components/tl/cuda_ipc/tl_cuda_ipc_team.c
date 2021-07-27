@@ -22,7 +22,7 @@ UCC_CLASS_INIT_FUNC(ucc_tl_cuda_ipc_team_t, ucc_base_context_t *tl_context,
 
     UCC_CLASS_CALL_SUPER_INIT(ucc_tl_team_t, &ctx->super, params->team);
     self->oob       = params->params.oob;
-    self->size      = self->oob.participants;
+    self->size      = self->oob.n_oob_eps;
     self->rank      = params->rank;
     self->map       = params->map;
     self->status    = UCC_INPROGRESS;
