@@ -139,4 +139,8 @@ ucc_status_t ucc_coll_score_map_lookup(ucc_score_map_t         *map,
                                        ucc_base_coll_args_t    *args,
                                        ucc_base_coll_init_fn_t *init,
                                        ucc_base_team_t        **team);
+
+
+ucc_status_t ucc_coll_score_dup(const ucc_coll_score_t *in,
+                                ucc_coll_score_t **out);
 #endif
