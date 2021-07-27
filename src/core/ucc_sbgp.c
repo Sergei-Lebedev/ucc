@@ -79,6 +79,16 @@ static inline ucc_status_t sbgp_create_socket(ucc_team_topo_t *topo,
     }
     return UCC_OK;
 }
+static inline ucc_status_t sbgp_create_full(ucc_team_topo_t *topo,
+                                            ucc_sbgp_t *     sbgp)
+{
+    sbgp->status     = UCC_SBGP_ENABLED;
+    sbgp->group_size = sbgp->team->size;
+    sbgp->group_rank = sbgp->team->rank;
+    sbgp->map.type   = UCC_EP_MAP_FULL;
+    sbgp->map.ep_num = sbgp->team->size;
+    return UCC_OK;
+}
 
 static inline ucc_status_t sbgp_create_node(ucc_team_topo_t *topo,
                                             ucc_sbgp_t *     sbgp)
@@ -341,13 +351,16 @@ ucc_status_t ucc_sbgp_create(ucc_team_topo_t *topo, ucc_sbgp_type_t type)
     ucc_team_t * team   = topo->team;
     ucc_sbgp_t * sbgp   = &topo->sbgps[type];
 
-    sbgp->team   = team;
-    sbgp->type   = type;
-    sbgp->status = UCC_SBGP_NOT_EXISTS;
-
+    sbgp->team     = team;
+    sbgp->type     = type;
+    sbgp->status   = UCC_SBGP_NOT_EXISTS;
+    sbgp->rank_map = NULL;
     switch (type) {
     case UCC_SBGP_NODE:
         status = sbgp_create_node(topo, sbgp);
+        break;
+    case UCC_SBGP_FULL:
+        status = sbgp_create_full(topo, sbgp);
         break;
     case UCC_SBGP_SOCKET:
         if (!topo->topo->sock_bound) {
@@ -389,7 +402,8 @@ ucc_status_t ucc_sbgp_create(ucc_team_topo_t *topo, ucc_sbgp_type_t type)
         status = UCC_ERR_NOT_IMPLEMENTED;
         break;
     };
-    if (UCC_SBGP_ENABLED == sbgp->status && sbgp->rank_map) {
+    if (UCC_SBGP_ENABLED == sbgp->status && sbgp->rank_map &&
+        sbgp->type != UCC_SBGP_FULL) {
         sbgp->map = ucc_ep_map_from_array(&sbgp->rank_map, sbgp->group_size,
                                           topo->team->size, 1);
     }

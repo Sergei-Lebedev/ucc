@@ -16,7 +16,7 @@ typedef enum ucc_sbgp_type_t {
     UCC_SBGP_NET,
     UCC_SBGP_SOCKET_LEADERS,
     UCC_SBGP_NUMA_LEADERS,
-    UCC_SBGP_FLAT,
+    UCC_SBGP_FULL,
     UCC_SBGP_LAST
 } ucc_sbgp_type_t;
 
