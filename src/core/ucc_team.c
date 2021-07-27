@@ -299,6 +299,48 @@ static inline ucc_status_t ucc_team_exchange(ucc_context_t *context,
     return UCC_OK;
 }
 
+static ucc_status_t ucc_team_build_score_map(ucc_team_t *team)
+{
+    ucc_coll_score_t *score, *score_merge, *score_next;
+    ucc_status_t      status;
+    int               i;
+
+    ucc_assert(team->n_cl_teams > 0);
+    status =
+        UCC_CL_TEAM_IFACE(team->cl_teams[0])
+        ->team.get_scores(&team->cl_teams[0]->super, &score);
+    if (UCC_OK != status) {
+        ucc_error("failed to get cl %s scores",
+                  UCC_CL_TEAM_IFACE(team->cl_teams[0])->super.name);
+        return status;
+    }
+    for (i = 1; i < team->n_cl_teams; i++) {
+        status =
+            UCC_CL_TEAM_IFACE(team->cl_teams[i])
+            ->team.get_scores(&team->cl_teams[i]->super, &score_next);
+        if (UCC_OK != status) {
+            ucc_error("failed to get cl %s scores",
+                      UCC_CL_TEAM_IFACE(team->cl_teams[i])->super.name);
+            ucc_coll_score_free(score);
+            return status;
+        }
+        status =
+            ucc_coll_score_merge(score, score_next, &score_merge, 1);
+        if (UCC_OK != status) {
+            ucc_error("failed to merge scores");
+            ucc_coll_score_free(score);
+            ucc_coll_score_free(score_next);
+            return status;
+        }
+        score = score_merge;
+    }
+    status = ucc_coll_score_build_map(score, &team->score_map);
+    if (UCC_OK != status) {
+        ucc_error("failed to build score map");
+    }
+    return status;
+}
+
 ucc_status_t ucc_team_create_test_single(ucc_context_t *context,
                                          ucc_team_t    *team)
 {
@@ -343,6 +385,9 @@ ucc_status_t ucc_team_create_test_single(ucc_context_t *context,
     }
 out:
     team->status = status;
+    if (UCC_OK == status) {
+        status = ucc_team_build_score_map(team);
+    }
     /* TODO: add team/coll selection and check if some teams are never
              used after selection and clean them up */
     return status;
@@ -389,6 +434,8 @@ static ucc_status_t ucc_team_destroy_single(ucc_team_h team)
     if (team->contexts[0]->service_team) {
         ucc_internal_oob_finalize(&team->bp.params.oob);
     }
+
+    ucc_coll_score_free_map(team->score_map);
     ucc_free(team->addr_storage.storage);
     ucc_free(team->ctx_ranks);
     ucc_team_relase_id(team);
