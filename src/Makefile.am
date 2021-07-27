@@ -13,6 +13,7 @@ endif
 
 if HAVE_CUDA
 mc_dirs += components/mc/cuda
+tl_dirs += components/tl/cuda_ipc
 endif
 
 if HAVE_NCCL
