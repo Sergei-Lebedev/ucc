@@ -197,6 +197,7 @@ AC_CONFIG_FILES([
                  src/components/cl/hier/Makefile
                  src/components/tl/ucp/Makefile
                  src/components/tl/nccl/Makefile
+                 src/components/tl/cuda_ipc/Makefile
                  src/components/mc/cpu/Makefile
                  src/components/mc/cuda/Makefile
                  src/components/mc/cuda/kernel/Makefile
