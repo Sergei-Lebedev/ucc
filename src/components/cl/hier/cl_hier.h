@@ -24,6 +24,7 @@ extern ucc_cl_hier_iface_t ucc_cl_hier;
 typedef enum {
     UCC_HIER_SBGP_NODE,
     UCC_HIER_SBGP_NET,
+    UCC_HIER_SBGP_FULL,
     UCC_HIER_SBGP_LAST,
 } ucc_hier_sbgp_type_t;
 
@@ -98,5 +99,9 @@ ucc_status_t ucc_cl_hier_coll_init(ucc_base_coll_args_t *coll_args,
 
 #define UCC_CL_HIER_TEAM_LIB(_team)                                             \
     (ucc_derived_of((_team)->super.super.context->lib, ucc_cl_hier_lib_t))
+
+ucc_status_t ucc_cl_hier_alltoallv_init(ucc_base_coll_args_t *coll_args,
+                                        ucc_base_team_t *team,
+                                        ucc_coll_task_t **task);
 
 #endif
