@@ -21,6 +21,7 @@ static void ucc_cl_hier_enable_sbgps(ucc_cl_hier_team_t *team)
 {
     SBGP_SET(team, NODE, ENABLED);
     SBGP_SET(team, NET, ENABLED);
+    SBGP_SET(team, FULL, ENABLED);
 }
 
 UCC_CLASS_INIT_FUNC(ucc_cl_hier_team_t, ucc_base_context_t *cl_context,
@@ -276,12 +277,26 @@ ucc_status_t ucc_cl_hier_team_get_scores(ucc_base_team_t *cl_team,
     ucc_base_lib_t      *lib  = UCC_CL_TEAM_LIB(team);
     ucc_coll_score_t  *score;
     ucc_status_t       status;
+    ucc_memory_type_t mt[2] = {UCC_MEMORY_TYPE_HOST, UCC_MEMORY_TYPE_CUDA};
+    int i;
 
     status = ucc_coll_score_alloc(&score);
     if (UCC_OK != status) {
         cl_error(lib, "faild to alloc score_t");
         return status;
     }
+
+    for (i = 0; i < 2; i++) {
+        status = ucc_coll_score_add_range(score, UCC_COLL_TYPE_ALLTOALLV,
+                                          mt[i], 0, UCC_MSG_MAX,
+                                          UCC_CL_HIER_DEFAULT_SCORE, ucc_cl_hier_alltoallv_init,
+                                          cl_team);
+        if (UCC_OK != status) {
+            cl_error(lib, "faild to add range to score_t");
+            return status;
+        }
+    }
+
     if (strlen(lib->score_str) > 0) {
         status = ucc_coll_score_update_from_str(
             lib->score_str, score, cl_team->team->size,
