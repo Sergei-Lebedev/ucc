@@ -55,7 +55,7 @@ UCC_CLASS_INIT_FUNC(ucc_cl_hier_team_t, ucc_base_context_t *cl_context,
                 /* SBGP of that type either not exists or the calling process
                    is not part of part */
                 cl_debug(cl_context->lib, "sbgp %s is not enabled",
-                          ucc_sbgp_type_str[hs->sbgp_type]);
+                         ucc_sbgp_str(hs->sbgp_type));
                 hs->state = UCC_HIER_SBGP_DISABLED;
                 continue;
             }
@@ -66,7 +66,7 @@ UCC_CLASS_INIT_FUNC(ucc_cl_hier_team_t, ucc_base_context_t *cl_context,
                                             tls->names[j], &hs->tl_ctxs[hs->n_tls]);
                 if (UCC_OK != status) {
                     cl_warn(cl_context->lib, "tl context %s is not available for sbgp %s",
-                             tls->names[j], ucc_sbgp_type_str[hs->sbgp_type]);
+                            tls->names[j], ucc_sbgp_str(hs->sbgp_type));
                 } else {
                     hs->n_tls++;
                     n_sbgp_teams++;
@@ -110,7 +110,7 @@ UCC_CLASS_INIT_FUNC(ucc_cl_hier_team_t, ucc_base_context_t *cl_context,
                 status = ucc_internal_oob_init(params->team, subset, &d->param.params.oob);
                 if (UCC_OK != status) {
                     cl_error(cl_context->lib, "failed to init oob for sbgp %s",
-                             ucc_sbgp_type_str[hs->sbgp->type]);
+                             ucc_sbgp_str(hs->sbgp->type));
                     goto err;
                 }
                 d->args[0] = i;
@@ -234,7 +234,7 @@ ucc_status_t ucc_cl_hier_team_create_test(ucc_base_team_t *cl_team)
                 }
             }
             cl_info(ctx->super.super.lib, "initialized tl %s team for sbgp %s",
-                    UCC_TL_CTX_IFACE(d->ctx)->super.name, ucc_sbgp_type_str[hs->sbgp_type]);
+                    UCC_TL_CTX_IFACE(d->ctx)->super.name, ucc_sbgp_str(hs->sbgp_type));
         } else {
             cl_error(ctx->super.super.lib, "failed to create tl %s team",
                      UCC_TL_CTX_IFACE(d->ctx)-> super.name);
@@ -253,7 +253,7 @@ ucc_status_t ucc_cl_hier_team_create_test(ucc_base_team_t *cl_team)
         if (hs->score == NULL) {
             cl_error(ctx->super.super.lib,
                      "no tl teams were created for sbgp %s",
-                     ucc_sbgp_type_str[hs->sbgp_type]);
+                     ucc_sbgp_str(hs->sbgp_type));
             hs->state = UCC_HIER_SBGP_DISABLED;
         } else {
             status = ucc_coll_score_build_map(hs->score, &hs->score_map);
