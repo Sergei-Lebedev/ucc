@@ -46,6 +46,11 @@ typedef struct ucc_tl_ucp_lib_config {
     uint32_t            bcast_kn_radix;
     uint32_t            alltoall_pairwise_num_posts;
     uint32_t            alltoallv_pairwise_num_posts;
+    uint32_t            allreduce_sra_kn_n_frags;
+    uint32_t            allreduce_sra_kn_pipeline_depth;
+    uint32_t            allreduce_sra_kn_seq;
+    size_t              allreduce_sra_kn_frag_thresh;
+    size_t              allreduce_sra_kn_frag_size;
 } ucc_tl_ucp_lib_config_t;
 
 typedef struct ucc_tl_ucp_context_config {
