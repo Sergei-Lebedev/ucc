@@ -54,6 +54,9 @@ typedef struct ucc_team {
 #define UCC_TEAM_ID_IS_EXTERNAL(_team) (team->id & UCC_TEAM_ID_EXTERNAL_BIT)
 #define UCC_TEAM_ID_MAX ((uint16_t)UCC_BIT(15) - 1)
 
+ucc_status_t ucc_core_triggered_post(ucc_ee_h ee, ucc_ev_t *ev,
+                                     ucc_coll_task_t *coll_task);
+
 void ucc_copy_team_params(ucc_team_params_t *dst, const ucc_team_params_t *src);
 
 /* Returns addressing information for "rank" in a team.
