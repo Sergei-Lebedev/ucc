@@ -43,6 +43,11 @@ static ucc_config_field_t ucc_context_config_table[] = {
      "is configured with OOB (global mode). 0 - disable, 1 - try, 2 - force.",
      ucc_offsetof(ucc_context_config_t, internal_oob), UCC_CONFIG_TYPE_UINT},
 
+    {"TRIGGERED_OVERLAP", "1",
+     "Split input/output dependency kernels during triggered post. May provide "
+     "overlap between algorithm stages.",
+     ucc_offsetof(ucc_context_config_t, triggered_overlap), UCC_CONFIG_TYPE_UINT},
+
     {NULL}};
 UCC_CONFIG_REGISTER_TABLE(ucc_context_config_table, "UCC context", NULL,
                           ucc_context_config_t, &ucc_config_global_list);
@@ -475,9 +480,12 @@ ucc_status_t ucc_context_create(ucc_lib_h lib,
         status = UCC_ERR_NO_MEMORY;
         goto error;
     }
-    ctx->rank          = UCC_RANK_MAX;
-    ctx->lib           = lib;
-    ctx->ids.pool_size = config->team_ids_pool_size;
+
+    ctx->rank              = UCC_RANK_MAX;
+    ctx->lib               = lib;
+    ctx->ids.pool_size     = config->team_ids_pool_size;
+    ctx->triggered_overlap = config->triggered_overlap;
+
     ucc_list_head_init(&ctx->progress_list);
     ucc_copy_context_params(&ctx->params, params);
     ucc_copy_context_params(&b_params.params, params);
