@@ -67,6 +67,7 @@ typedef struct ucc_context {
     ucc_topo_t              *topo;
     uint64_t                 cl_flags;
     ucc_tl_team_t           *service_team;
+    uint32_t                 triggered_overlap;
 } ucc_context_t;
 
 typedef struct ucc_context_config {
@@ -78,6 +79,7 @@ typedef struct ucc_context_config {
     uint32_t                  estimated_num_ppn;
     uint32_t                  lock_free_progress_q;
     uint32_t                  internal_oob;
+    uint32_t                  triggered_overlap;
 } ucc_context_config_t;
 
 /* Any internal UCC component (TL, CL, etc) may register its own
