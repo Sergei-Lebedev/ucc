@@ -201,7 +201,7 @@ ucc_tl_ucp_allreduce_sra_knomial_init(ucc_base_coll_args_t *coll_args,
         cfg->allreduce_sra_kn_seq, schedule_p);
     schedule_p->super.super.finalize =
         ucc_tl_ucp_allreduce_sra_pipelined_finalize;
-    schedule_p->super.super.triggered_post = ucc_tl_ucp_triggered_post;
+    schedule_p->super.super.triggered_post = ucc_core_triggered_post;
     schedule_p->super.super.post = ucc_tl_ucp_allreduce_sra_knomial_start;
     *task_h                                = &schedule_p->super.super;
     return UCC_OK;
