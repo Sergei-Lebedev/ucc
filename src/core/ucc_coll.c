@@ -230,7 +230,7 @@ ucc_event_trigger_complete(ucc_coll_task_t *parent_task,
 
 static ucc_status_t ucc_wait_for_event_trigger(ucc_coll_task_t *coll_task)
 {
-    /* ucc_context_t     *ctx = coll_task->team->context->ucc_context; */
+    ucc_context_t     *ctx = coll_task->team->context->ucc_context;
     ucc_ev_t          *post_event, *ev;
     ucc_status_t       status;
 
@@ -254,30 +254,30 @@ static ucc_status_t ucc_wait_for_event_trigger(ucc_coll_task_t *coll_task)
          * run early triggered post if it's there
          * currently only alltoallv supports it and skip for all other collectives
          */
-        /* if (ctx->triggered_overlap) { */
-        /*     status = ucc_mc_ee_task_enqueue(coll_task->ee->ee_context, */
-        /*                                     coll_task->ee->ee_type, */
-        /*                                     &coll_task->ee_task); */
-        /*     if (ucc_unlikely(status != UCC_OK)) { */
-        /*         ucc_error("error in ee task enqueue"); */
-        /*         coll_task->super.status = status; */
-        /*         return status; */
-        /*     } */
-        /* } */
+        if (ctx->triggered_overlap) {
+            status = ucc_mc_ee_task_enqueue(coll_task->ee->ee_context,
+                                            coll_task->ee->ee_type,
+                                            &coll_task->ee_task);
+            if (ucc_unlikely(status != UCC_OK)) {
+                ucc_error("error in ee task enqueue");
+                coll_task->super.status = status;
+                return status;
+            }
+        }
         if (coll_task->triggered_task->early_triggered_post) {
             coll_task->triggered_task->ee = coll_task->ee;
             status = coll_task->triggered_task->early_triggered_post(coll_task->triggered_task);
             assert(status == UCC_OK);
         }
 
-        /* if (ctx->triggered_overlap) { */
-        /*     status = ucc_mc_ee_task_sync(coll_task->ee_task, */
-        /*                                  coll_task->ee->ee_type); */
-        /* } else { */
+        if (ctx->triggered_overlap) {
+            status = ucc_mc_ee_task_sync(coll_task->ee_task,
+                                         coll_task->ee->ee_type);
+        } else {
             status = ucc_mc_ee_task_post(coll_task->ee->ee_context,
                                          coll_task->ee->ee_type,
                                          &coll_task->ee_task);
-        /* } */
+        }
         if (ucc_unlikely(status != UCC_OK)) {
             ucc_error("error in ee task post");
             coll_task->super.status = status;
