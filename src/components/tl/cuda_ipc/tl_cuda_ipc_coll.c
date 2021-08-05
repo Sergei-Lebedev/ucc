@@ -144,15 +144,17 @@ static ucc_status_t ucc_tl_cuda_ipc_alltoallv_post_copies(ucc_coll_task_t *coll_
     return UCC_OK;
 }
 
-
-ucc_status_t ucc_tl_cuda_ipc_alltoallv_start(ucc_coll_task_t *coll_task)
+ucc_status_t ucc_tl_cuda_ipc_alltoallv_early_triggered_post(ucc_coll_task_t *coll_task)
 {
     ucc_tl_cuda_ipc_task_t *task = ucc_derived_of(coll_task,
                                                   ucc_tl_cuda_ipc_task_t);
-    ucc_tl_cuda_ipc_team_t *team = TASK_TEAM(task);
     ucc_status_t            status;
 
     ucc_tl_cuda_ipc_task_reset(task);
+    task->early_posted = 1;
+    if (coll_task->ee->ee_context) {
+        task->stream = (cudaStream_t)coll_task->ee->ee_context;
+    }
     status = ucc_tl_cuda_ipc_alltoallv_cuda_ipc_setup(&task->super);
     if (UCC_OK != status) {
         return status;
@@ -162,11 +164,35 @@ ucc_status_t ucc_tl_cuda_ipc_alltoallv_start(ucc_coll_task_t *coll_task)
         return status;
     }
 
+    return status;
+}
+
+
+ucc_status_t ucc_tl_cuda_ipc_alltoallv_start(ucc_coll_task_t *coll_task)
+{
+    ucc_tl_cuda_ipc_task_t *task = ucc_derived_of(coll_task,
+                                                  ucc_tl_cuda_ipc_task_t);
+    ucc_tl_cuda_ipc_team_t *team = TASK_TEAM(task);
+    ucc_status_t            status;
+
+    if (!task->early_posted) {
+        ucc_tl_cuda_ipc_task_reset(task);
+        status = ucc_tl_cuda_ipc_alltoallv_cuda_ipc_setup(&task->super);
+        if (UCC_OK != status) {
+            return status;
+        }
+        status = ucc_tl_cuda_ipc_alltoallv_post_copies(&task->super);
+        if (UCC_OK != status) {
+            return status;
+        }
+    }
+
     ucc_tl_cuda_ipc_alltoallv_progress(&task->super);
     if (UCC_INPROGRESS == task->super.super.status) {
         ucc_progress_enqueue(UCC_TL_CORE_CTX(team)->pq, &task->super);
         return UCC_OK;
     }
+
     return ucc_task_complete(coll_task);
 
 }
@@ -200,7 +226,8 @@ ucc_status_t ucc_tl_cuda_ipc_alltoallv_init(ucc_base_coll_args_t *coll_args,
     task->super.post     = ucc_tl_cuda_ipc_alltoallv_start;
     task->super.progress = ucc_tl_cuda_ipc_alltoallv_progress;
     task->super.finalize = ucc_tl_cuda_ipc_alltoallv_finalize;
-
+    task->super.early_triggered_post =
+        ucc_tl_cuda_ipc_alltoallv_early_triggered_post;
     *task_p = &task->super;
     return UCC_OK;
 }

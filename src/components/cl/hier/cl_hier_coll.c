@@ -23,6 +23,30 @@ static ucc_status_t ucc_cl_hier_alltoallv_post(ucc_coll_task_t *task)
     return ucc_schedule_start(schedule);
 }
 
+static ucc_status_t
+ucc_cl_hier_alltoallv_early_triggered_post(ucc_coll_task_t *coll_task)
+{
+    ucc_schedule_t  *schedule = ucc_derived_of(coll_task, ucc_schedule_t);
+    ucc_coll_task_t *task;
+    ucc_status_t     status;
+    int              i;
+
+    for (i = 0; i < schedule->n_tasks; i++) {
+        task = schedule->tasks[i];
+        if (task->early_triggered_post) {
+            task->ee = coll_task->ee;
+            status   = task->early_triggered_post(task);
+            if (UCC_OK != status) {
+                cl_error(coll_task->team->context->lib,
+                         "failure in early_triggered_post, task %p", task);
+                coll_task->super.status = status;
+                return status;
+            }
+        }
+    }
+    return UCC_OK;
+}
+
 static ucc_status_t ucc_cl_hier_alltoallv_finalize(ucc_coll_task_t *task)
 {
     ucc_status_t status = UCC_OK;
@@ -161,7 +185,8 @@ ucc_status_t ucc_cl_hier_alltoallv_init(ucc_base_coll_args_t *coll_args,
     schedule->super.post     = ucc_cl_hier_alltoallv_post;
     schedule->super.progress = NULL;
     schedule->super.finalize = ucc_cl_hier_alltoallv_finalize;
-
+    schedule->super.early_triggered_post = ucc_cl_hier_alltoallv_early_triggered_post;
+    schedule->super.triggered_post = ucc_core_triggered_post;
     *task = &schedule->super;
     return UCC_OK;
 }
