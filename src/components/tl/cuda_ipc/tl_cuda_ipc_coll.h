@@ -14,6 +14,7 @@
 typedef struct ucc_tl_cuda_ipc_task {
     ucc_coll_task_t      super;
     uint32_t             seq_num;
+    uint32_t             early_posted;
     cudaStream_t         stream;
     cudaEvent_t          event;
     void                *data[MAX_STATIC_SIZE];
@@ -28,6 +29,7 @@ typedef struct ucc_tl_cuda_ipc_task {
 static inline void ucc_tl_cuda_ipc_task_reset(ucc_tl_cuda_ipc_task_t *task)
 {
     task->super.super.status = UCC_INPROGRESS;
+    task->early_posted       = 0;
 }
 
 static inline
@@ -51,7 +53,8 @@ ucc_tl_cuda_ipc_init_task(ucc_base_coll_args_t *coll_args, ucc_base_team_t *team
     ucc_tl_cuda_ipc_task_t *task    = ucc_tl_cuda_ipc_get_task(tl_team);
 
     ucc_coll_task_init(&task->super, &coll_args->args, team);
-    task->seq_num = tl_team->seq_num++;
+    task->seq_num      = tl_team->seq_num++;
+    task->early_posted = 0;
     return task;
 }
 
