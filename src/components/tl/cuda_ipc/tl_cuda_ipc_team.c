@@ -8,6 +8,7 @@
 #include "tl_cuda_ipc_coll.h"
 #include "core/ucc_mc.h"
 #include "core/ucc_ee.h"
+#include "core/ucc_team.h"
 #include "coll_score/ucc_coll_score.h"
 #include <sys/shm.h>
 
@@ -21,6 +22,12 @@ UCC_CLASS_INIT_FUNC(ucc_tl_cuda_ipc_team_t, ucc_base_context_t *tl_context,
     ucc_status_t               status;
 
     UCC_CLASS_CALL_SUPER_INIT(ucc_tl_team_t, &ctx->super, params->team);
+
+    if (!ucc_all_ranks_on_local_node(params->team, params->map)) {
+        tl_debug(tl_context->lib,
+                 "can't create cuda_ipc team for multi-node team");
+        return UCC_ERR_INVALID_PARAM;
+    }
     self->oob       = params->params.oob;
     self->size      = self->oob.n_oob_eps;
     self->rank      = params->rank;

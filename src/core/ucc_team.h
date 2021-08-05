@@ -109,11 +109,20 @@ static inline ucc_rank_t ucc_get_ctx_rank(ucc_team_t *team, ucc_rank_t team_rank
 
 static inline int ucc_rank_on_local_node(int team_rank, ucc_team_t *team)
 {
-    ucc_proc_info_t *procs       = team->topo->topo->procs;
-    ucc_rank_t       ctx_rank    = ucc_ep_map_eval(team->ctx_map, team_rank);
-    ucc_rank_t       my_ctx_rank = ucc_ep_map_eval(team->ctx_map, team->rank);
+    if (team->topo) {
+        /* faster lookup via topo */
+        ucc_proc_info_t *procs       = team->topo->topo->procs;
+        ucc_rank_t       ctx_rank    = ucc_ep_map_eval(team->ctx_map, team_rank);
+        ucc_rank_t       my_ctx_rank = ucc_ep_map_eval(team->ctx_map, team->rank);
 
-    return procs[ctx_rank].host_hash == procs[my_ctx_rank].host_hash;
+        return procs[ctx_rank].host_hash == procs[my_ctx_rank].host_hash;
+    } else {
+        ucc_context_addr_header_t *h1, *h2;
+
+        h1 = ucc_get_team_ep_header(team->contexts[0], team, team_rank);
+        h2 = ucc_get_team_ep_header(team->contexts[0], team, team->rank);
+        return h1->ctx_id.pi.host_hash == h2->ctx_id.pi.host_hash;
+    }
 }
 
 static inline int ucc_rank_on_local_socket(int team_rank, ucc_team_t *team)
@@ -128,6 +137,21 @@ static inline int ucc_rank_on_local_socket(int team_rank, ucc_team_t *team)
     }
     return proc->host_hash == my_proc->host_hash &&
            proc->socket_id == my_proc->socket_id;
+}
+
+static inline int ucc_all_ranks_on_local_node(ucc_team_t *team,
+                                              ucc_ep_map_t map)
+{
+    ucc_rank_t r, size;
+
+    ucc_assert(map.ep_num <= UCC_RANK_MAX);
+    size = (ucc_rank_t)map.ep_num;
+    for (r = 0; r < size; r++) {
+        if (!ucc_rank_on_local_node(ucc_ep_map_eval(map, r), team)) {
+            return 0;
+        }
+    }
+    return 1;
 }
 
 #endif
