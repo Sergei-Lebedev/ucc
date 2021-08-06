@@ -49,7 +49,7 @@ typedef struct {
 typedef struct {
     void              *d_ptr;
     size_t             size;
-    uint32_t           seq_num[2];
+    uint32_t           seq_num[3];
     cudaIpcMemHandle_t handle;
     size_t             offset;
     mem_info_data_t    data[1];
@@ -64,13 +64,6 @@ typedef struct ucc_tl_cuda_ipc_context {
 UCC_CLASS_DECLARE(ucc_tl_cuda_ipc_context_t, const ucc_base_context_params_t *,
                   const ucc_base_config_t *);
 
-typedef struct {
-    cudaEvent_t          event;
-    cudaEvent_t          ipc_event;
-    cudaIpcEventHandle_t ipc_event_handle;
-} cuda_ipc_sync_t;
-
-
 typedef struct ucc_tl_cuda_ipc_team {
     ucc_tl_team_t        super;
     ucc_status_t         status;
@@ -83,7 +76,6 @@ typedef struct ucc_tl_cuda_ipc_team {
     uint32_t             seq_num;
     mem_info_t          *mem_info;
     int                 *shm_ids;
-    cuda_ipc_sync_t     *sync;
 } ucc_tl_cuda_ipc_team_t;
 
 #define TASK_TEAM(_task)                                                       \
@@ -142,9 +134,6 @@ UCC_CLASS_DECLARE(ucc_tl_cuda_ipc_team_t, ucc_base_context_t *,
         _mi  = PTR_OFFSET(_mi, _ctrl_size_rank * (_rank));              \
         (mem_info_t*)_mi;                                               \
     })
-
-
-#define GET_SYNC(_team, _coll_id) &((_team)->sync[(_team)->size * (_coll_id)])
 
 ucc_cuda_ipc_cache_t* ucc_cuda_ipc_get_cache(ucc_tl_cuda_ipc_team_t *team,
                                              ucc_rank_t rank);

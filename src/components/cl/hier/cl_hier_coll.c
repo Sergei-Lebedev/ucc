@@ -20,7 +20,11 @@ ucc_status_t ucc_cl_hier_coll_init(ucc_base_coll_args_t *coll_args,
 static ucc_status_t ucc_cl_hier_alltoallv_post(ucc_coll_task_t *task)
 {
     ucc_schedule_t *schedule = ucc_derived_of(task, ucc_schedule_t);
+    int             i;
 
+    for (i = 0; i < schedule->n_tasks; i++) {
+         schedule->tasks[i]->ee_task = schedule->super.ee_task;
+    }
     return ucc_schedule_start(schedule);
 }
 

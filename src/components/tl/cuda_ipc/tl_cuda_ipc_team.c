@@ -73,7 +73,6 @@ UCC_CLASS_INIT_FUNC(ucc_tl_cuda_ipc_team_t, ucc_base_context_t *tl_context,
 
 UCC_CLASS_CLEANUP_FUNC(ucc_tl_cuda_ipc_team_t)
 {
-    ucc_free(self->sync);
     tl_info(self->super.super.context->lib, "finalizing tl team: %p", self);
 }
 
@@ -90,10 +89,8 @@ ucc_status_t ucc_tl_cuda_ipc_team_create_test(ucc_base_team_t *tl_team)
 {
     ucc_tl_cuda_ipc_team_t *team           =
         ucc_derived_of(tl_team, ucc_tl_cuda_ipc_team_t);
-    uint32_t                max_concurrent =
-        UCC_TL_CUDA_IPC_TEAM_LIB(team)->cfg.max_concurrent;
     ucc_status_t            status;
-    int                     shm_id, i;
+    int                     shm_id;
 
     if (team->status == UCC_OK) {
         return UCC_OK;
@@ -122,24 +119,6 @@ ucc_status_t ucc_tl_cuda_ipc_team_create_test(ucc_base_team_t *tl_team)
                      errno, strerror(errno));
             return UCC_ERR_NO_MEMORY;
         }
-    }
-    team->sync = ucc_malloc(sizeof(cuda_ipc_sync_t) *
-                            max_concurrent * team->size);
-    if (!team->sync) {
-        tl_error(tl_team->context->lib, "failed to allocate %zd bytes for sync",
-                 sizeof(cuda_ipc_sync_t) * max_concurrent * team->size);
-        return UCC_ERR_NO_MEMORY;
-    }
-    for (i = 0; i < max_concurrent * team->size; i++) {
-        CUDACHECK_GOTO(cudaEventCreateWithFlags(&team->sync[i].event,
-                                                cudaEventDisableTiming |
-                                                cudaEventInterprocess),
-                       err, status, tl_team->context->lib);
-        CUDACHECK_GOTO(cudaIpcGetEventHandle(&team->sync[i].ipc_event_handle,
-                                             team->sync[i].event),
-                       err, status, tl_team->context->lib);
-        team->sync[i].ipc_event = (cudaEvent_t)NULL;
-
     }
     CUDACHECK_GOTO(cudaStreamCreateWithFlags(&team->stream,
                    cudaStreamNonBlocking), err, status,
