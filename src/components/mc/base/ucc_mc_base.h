@@ -125,6 +125,50 @@ typedef struct ucc_ee_ops {
     ucc_status_t (*ee_event_test)(void *event);
 } ucc_ee_ops_t;
 
+typedef struct ucc_ee_executor {
+    ucc_ee_type_t  ee_type;
+    void          *ee_context;
+} ucc_ee_executor_t;
+
+typedef enum ucc_ee_executor_task_type {
+    UCC_MC_EE_EXECUTOR_TASK_TYPE_WAIT         = UCC_BIT(0),
+    UCC_MC_EE_EXECUTOR_TASK_TYPE_REDUCE       = UCC_BIT(1),
+    UCC_MC_EE_EXECUTOR_TASK_TYPE_REDUCE_MULTI = UCC_BIT(2),
+    UCC_MC_EE_EXECUTOR_TASK_TYPE_COPY         = UCC_BIT(3),
+} ucc_ee_executor_task_type_t;
+
+typedef struct ucc_ee_executor_params {
+    uint64_t        mask;
+    ucc_ee_type_t   ee_type;
+    void           *ee_context;
+    uint64_t        task_types;
+} ucc_ee_executor_params_t;
+
+typedef struct ucc_ee_executor_task_args {
+    ucc_ee_executor_task_type_t task_type;
+    ucc_coll_buffer_info_t      src1;
+    ucc_coll_buffer_info_t      src2;
+    ucc_coll_buffer_info_t      dst;
+    ucc_reduction_op_t          op;
+} ucc_ee_executor_task_args_t;
+
+typedef struct ucc_ee_executor_task {
+    ucc_ee_executor_t           *eee;
+    ucc_ee_executor_task_args_t  args;
+    ucc_status_t                 status;
+} ucc_ee_executor_task_t;
+
+typedef struct ucc_ee_executor_ops {
+    ucc_status_t (*executor_create_post)(const ucc_ee_executor_params_t *params,
+                                            ucc_ee_executor_t **executor);
+    ucc_status_t (*executor_create_test)(ucc_ee_executor_t *executor);
+    ucc_status_t (*executor_task_post)(ucc_ee_executor_task_args_t *task_args,
+                                       ucc_ee_executor_task_t **task,
+                                       ucc_ee_executor_t *executor);
+    ucc_status_t (*executor_task_test)(ucc_ee_executor_task_t *task);
+    ucc_status_t (*executor_destroy)(ucc_ee_executor_t *executor);
+} ucc_ee_executor_ops_t;
+
 typedef struct ucc_mc_base {
     ucc_component_iface_t           super;
     uint32_t                        ref_cnt;
@@ -137,6 +181,7 @@ typedef struct ucc_mc_base {
     ucc_status_t                   (*finalize)();
     ucc_mc_ops_t                    ops;
     const ucc_ee_ops_t              ee_ops;
+    const ucc_ee_executor_ops_t     executor_ops;
 } ucc_mc_base_t;
 
 #endif

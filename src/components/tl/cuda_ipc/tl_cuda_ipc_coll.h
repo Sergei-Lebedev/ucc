@@ -8,6 +8,7 @@
 #define UCC_TL_NCCL_COLL_H_
 
 #include "tl_cuda_ipc.h"
+#include "core/ucc_mc.h"
 
 #define MAX_STATIC_SIZE 16
 
@@ -19,10 +20,11 @@ typedef struct ucc_tl_cuda_ipc_task {
     cudaEvent_t          event;
     void                *data[MAX_STATIC_SIZE];
     struct {
-        void                   *info;
-        void                  **peer_map_addr;
-        uint32_t                coll_id;
-        uint32_t                n;
+        void                         *info;
+        void                        **peer_map_addr;
+        uint32_t                      coll_id;
+        uint32_t                      n;
+        ucc_ee_executor_task_t      *exec_task[MAX_STATIC_SIZE];
     } alltoallv;
 } ucc_tl_cuda_ipc_task_t;
 

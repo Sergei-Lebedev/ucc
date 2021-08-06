@@ -48,123 +48,92 @@ ucc_status_t ucc_tl_cuda_ipc_alltoallv_finalize(ucc_coll_task_t *coll_task)
 
 ucc_status_t ucc_tl_cuda_ipc_alltoallv_progress(ucc_coll_task_t *coll_task)
 {
-    ucc_tl_cuda_ipc_task_t *task = ucc_derived_of(coll_task,
-                                                  ucc_tl_cuda_ipc_task_t);
-    cudaError_t cu_err;
-
-    cu_err = cudaEventQuery(task->event);
-
-    task->super.super.status = cuda_error_to_ucc_status(cu_err);
-    return task->super.super.status;
-}
-
-static ucc_status_t ucc_tl_cuda_ipc_alltoallv_post_copies(ucc_coll_task_t *coll_task)
-{
-    ucc_tl_cuda_ipc_task_t *task = ucc_derived_of(coll_task,
-                                                  ucc_tl_cuda_ipc_task_t);
-    ucc_tl_cuda_ipc_team_t *team  = TASK_TEAM(task);
-    ptrdiff_t          rbuf  = (ptrdiff_t)coll_task->args.dst.info_v.buffer;
-    size_t   rdt_size, sdt_size, data_size, data_displ, ipc_thresh;
-    int i, peer;
+    ucc_tl_cuda_ipc_task_t *task     = ucc_derived_of(coll_task,
+                                                      ucc_tl_cuda_ipc_task_t);
+    ucc_tl_cuda_ipc_team_t *team     = TASK_TEAM(task);
+    uint32_t                coll_id  = task->alltoallv.coll_id;
+    ucc_rank_t              num_done = 0;
+    ucc_rank_t i, peer;
     mem_info_t *peer_info, *my_info;
-    ptrdiff_t src;
-    uint32_t coll_id;
-    uint32_t max_concurrent;
-    cuda_ipc_sync_t        *s;
-
-    max_concurrent = UCC_TL_CUDA_IPC_TEAM_LIB(team)->cfg.max_concurrent;
-    /* ipc_thresh = UCC_TL_CUDA_IPC_TEAM_CTX(team)->cfg.alltoallv_ipc_thresh; */
-    ipc_thresh = 0;
-
-    coll_id   = (task->seq_num % max_concurrent);
-    s = GET_SYNC(team, coll_id);
-    rdt_size = ucc_dt_size(coll_task->args.dst.info_v.datatype);
-    sdt_size = ucc_dt_size(coll_task->args.src.info_v.datatype);
-    for (i=0; i < team->size; i++) {
-        peer = (team->rank + i) % team->size;
-        /* peer_info = &((mem_info_t *)task->alltoall_intra.info)[peer]; */
-        peer_info = GET_MEM_INFO(team, coll_id, peer);
-
-        if (peer == team->rank) {
-            src = (ptrdiff_t)coll_task->args.src.info_v.buffer +
-                    + peer_info->data[team->rank].displ;
-        } else {
-            src = (ptrdiff_t) task->alltoallv.peer_map_addr[peer] +
-                    peer_info->offset + peer_info->data[team->rank].displ;
-        }
-
-        data_size  = ucc_coll_args_get_count(&coll_task->args,
-                            coll_task->args.dst.info_v.counts, peer) * rdt_size;
-        if (data_size < ipc_thresh) {
-            continue;
-        }
-        data_displ = ucc_coll_args_get_displacement(&coll_task->args,
-                            coll_task->args.dst.info_v.displacements, peer)* rdt_size;
-
-        //printf("SNED [%d: %d] sdispl:%ld rdispl:(%ld:%ld) size:%ld \n", team->rank, rank, data_displ, peer_info->offset, peer_info->displ[intra_rank], data_size);
-        if (data_size != 0) {
-            if (peer != team->rank) {
-                CUDACHECK(cudaStreamWaitEvent(task->stream,
-                                              s[peer].ipc_event, 0));
-            }
-
-            CUDACHECK(cudaMemcpyAsync((void *)(rbuf + data_displ), (void *)src,
-                                      data_size, cudaMemcpyDeviceToDevice,
-                                      task->stream));
-
-            if (peer != team->rank) {
-                CUDACHECK(cudaEventRecord(s[peer].ipc_event, task->stream));
-            }
-        }
-    }
-
-    my_info = GET_MEM_INFO(team, coll_id, team->rank);
-
-    volatile mem_info_t *pi;
-    __sync_synchronize();
-    asm volatile("": : :"memory");
-    my_info->seq_num[1] = task->seq_num;
+    ucc_status_t st;
 
     for (i = 0; i < team->size; i++) {
-        pi = GET_MEM_INFO(team, coll_id, i);
-        while (pi->seq_num[1] != task->seq_num);
-    }
+        peer = (team->rank + i) % team->size;
+        if ((task->alltoallv.exec_task[peer] == NULL) &&
+            (GET_MEM_INFO(team, coll_id, peer)->seq_num[1] == task->seq_num)) {
+            ucc_ee_executor_task_args_t exec_args;
+            void                        *src, *dst;
+            size_t                      data_size, data_displ, dt_size;
 
-    for (i= 0 ; i < team->size; i++) {
-        pi = GET_MEM_INFO(team, coll_id, i);
-        if (i != team->rank) {
+            peer_info  = GET_MEM_INFO(team, coll_id, peer);
             data_size  = ucc_coll_args_get_count(&coll_task->args,
-                            coll_task->args.src.info_v.counts, i) * sdt_size;
-            if (data_size != 0) {
-                CUDACHECK(cudaStreamWaitEvent(task->stream, s[i].event, 0));
+                                coll_task->args.dst.info_v.counts, peer);
+            data_displ = ucc_coll_args_get_displacement(&coll_task->args,
+                                coll_task->args.dst.info_v.displacements, peer);
+            dt_size    = ucc_dt_size(coll_task->args.dst.info_v.datatype);
+
+            if (peer == team->rank) {
+                src = PTR_OFFSET(coll_task->args.src.info_v.buffer,
+                        peer_info->data[team->rank].displ);
+            } else {
+                src = PTR_OFFSET(task->alltoallv.peer_map_addr[peer],
+                        peer_info->offset + peer_info->data[team->rank].displ);
+            }
+            dst = PTR_OFFSET(coll_task->args.dst.info_v.buffer,
+                    data_displ * dt_size);
+
+            exec_args.task_type     = UCC_MC_EE_EXECUTOR_TASK_TYPE_COPY;
+            exec_args.src1.buffer   = src;
+            exec_args.src1.count    = data_size * dt_size;
+            exec_args.dst.buffer    = dst;
+            exec_args.dst.count     = data_size * dt_size;
+            st = ucc_ee_executor_task_post(&exec_args,
+                                           &task->alltoallv.exec_task[peer],
+                                           task->super.ee_task);
+            if (ucc_unlikely(st != UCC_OK)) {
+                task->super.super.status = st;
+                goto exit;
             }
         }
+        if ((task->alltoallv.exec_task[peer] != NULL) &&
+            (ucc_ee_executor_task_test(task->alltoallv.exec_task[peer]) == UCC_OK)) {
+            num_done++;
+        }
     }
-    CUDACHECK(cudaEventRecord(task->event, task->stream));
-    return UCC_OK;
+
+    if (num_done == team->size) {
+        my_info = GET_MEM_INFO(team, coll_id, team->rank);
+        __sync_synchronize();
+        asm volatile("": : :"memory");
+        my_info->seq_num[2] = task->seq_num;
+    }
+
+    num_done = 0;
+    for (i = 0; i < team->size; i++) {
+        mem_info_t *pi = GET_MEM_INFO(team, coll_id, i);
+        if (pi->seq_num[2] == task->seq_num) {
+            num_done++;
+        }
+    }
+
+    task->super.super.status = (num_done == team->size) ? UCC_OK: UCC_INPROGRESS;
+exit:
+    return task->super.super.status;
 }
 
 ucc_status_t ucc_tl_cuda_ipc_alltoallv_early_triggered_post(ucc_coll_task_t *coll_task)
 {
-    ucc_tl_cuda_ipc_task_t *task = ucc_derived_of(coll_task,
-                                                  ucc_tl_cuda_ipc_task_t);
-    ucc_status_t            status;
+    return UCC_OK;
+    // ucc_tl_cuda_ipc_task_t *task = ucc_derived_of(coll_task,
+    //                                               ucc_tl_cuda_ipc_task_t);
 
-    ucc_tl_cuda_ipc_task_reset(task);
-    task->early_posted = 1;
-    if (coll_task->ee->ee_context) {
-        task->stream = (cudaStream_t)coll_task->ee->ee_context;
-    }
-    status = ucc_tl_cuda_ipc_alltoallv_cuda_ipc_setup(&task->super);
-    if (UCC_OK != status) {
-        return status;
-    }
-    status = ucc_tl_cuda_ipc_alltoallv_post_copies(&task->super);
-    if (UCC_OK != status) {
-        return status;
-    }
+    // ucc_tl_cuda_ipc_task_reset(task);
+    // task->early_posted = 1;
+    // if (coll_task->ee->ee_context) {
+    //     task->stream = (cudaStream_t)coll_task->ee->ee_context;
+    // }
 
-    return status;
+    // return ucc_tl_cuda_ipc_alltoallv_cuda_ipc_setup(&task->super);
 }
 
 
@@ -173,19 +142,25 @@ ucc_status_t ucc_tl_cuda_ipc_alltoallv_start(ucc_coll_task_t *coll_task)
     ucc_tl_cuda_ipc_task_t *task = ucc_derived_of(coll_task,
                                                   ucc_tl_cuda_ipc_task_t);
     ucc_tl_cuda_ipc_team_t *team = TASK_TEAM(task);
-    ucc_status_t            status;
+    mem_info_t             *info = GET_MEM_INFO(team, task->alltoallv.coll_id,
+                                                team->rank);
+    ucc_rank_t rank;
 
-    if (!task->early_posted) {
-        ucc_tl_cuda_ipc_task_reset(task);
-        status = ucc_tl_cuda_ipc_alltoallv_cuda_ipc_setup(&task->super);
-        if (UCC_OK != status) {
-            return status;
-        }
-        status = ucc_tl_cuda_ipc_alltoallv_post_copies(&task->super);
-        if (UCC_OK != status) {
-            return status;
-        }
+    // ucc_status_t status;
+    // if (!task->early_posted) {
+    //     ucc_tl_cuda_ipc_task_reset(task);
+    //     status = ucc_tl_cuda_ipc_alltoallv_cuda_ipc_setup(&task->super);
+    //     if (UCC_OK != status) {
+    //         return status;
+    //     }
+    // }
+
+    for (rank = 0; rank < team->size; rank++) {
+        task->alltoallv.exec_task[rank] = NULL;
     }
+    __sync_synchronize();
+    asm volatile("": : :"memory");
+    info->seq_num[1] = task->seq_num;
 
     ucc_tl_cuda_ipc_alltoallv_progress(&task->super);
     if (UCC_INPROGRESS == task->super.super.status) {
@@ -196,7 +171,6 @@ ucc_status_t ucc_tl_cuda_ipc_alltoallv_start(ucc_coll_task_t *coll_task)
     return ucc_task_complete(coll_task);
 
 }
-
 
 ucc_status_t ucc_tl_cuda_ipc_alltoallv_init(ucc_base_coll_args_t *coll_args,
                                             ucc_base_team_t *tl_team,
@@ -228,6 +202,7 @@ ucc_status_t ucc_tl_cuda_ipc_alltoallv_init(ucc_base_coll_args_t *coll_args,
     task->super.finalize = ucc_tl_cuda_ipc_alltoallv_finalize;
     task->super.early_triggered_post =
         ucc_tl_cuda_ipc_alltoallv_early_triggered_post;
+    ucc_tl_cuda_ipc_alltoallv_cuda_ipc_setup(&task->super);
     *task_p = &task->super;
     return UCC_OK;
 }
@@ -269,8 +244,8 @@ ucc_status_t ucc_tl_cuda_ipc_alltoallv_cuda_ipc_setup(ucc_coll_task_t *coll_task
     void                   *mapped_addr;
     size_t                  total_counts;
     uint32_t                max_concurrent;
-    cuda_ipc_sync_t        *s;
     ucc_cuda_ipc_cache_t   *cache;
+
     max_concurrent = UCC_TL_CUDA_IPC_TEAM_LIB(team)->cfg.max_concurrent;
     /* ipc_thresh = UCC_TL_CUDA_IPC_TEAM_CTX(team)->cfg.alltoallv_ipc_thresh; */
     ipc_thresh = 0;
@@ -293,12 +268,9 @@ ucc_status_t ucc_tl_cuda_ipc_alltoallv_cuda_ipc_setup(ucc_coll_task_t *coll_task
     my_info->size   = alloc_length;
     my_info->offset = coll_task->args.src.info_v.buffer - base_address;
 
-    s = GET_SYNC(team, coll_id);
     for (i = 0; i < team->size; i++) {
         my_info->data[i].displ =  ucc_coll_args_get_displacement(&coll_task->args,
                 coll_task->args.src.info_v.displacements, i) * sdt_size;
-        my_info->data[i].ev_handle = s[i].ipc_event_handle;
-        CUDACHECK(cudaEventRecord(s[i].event, task->stream));
     }
 
     /* { */
@@ -337,13 +309,6 @@ ucc_status_t ucc_tl_cuda_ipc_alltoallv_cuda_ipc_setup(ucc_coll_task_t *coll_task
                 return UCC_ERR_INVALID_PARAM;
             }
             task->alltoallv.peer_map_addr[i] = mapped_addr;
-        }
-
-        if(i != team->rank) {
-            if (s[i].ipc_event == (cudaEvent_t) NULL) {
-                CUDACHECK(cudaIpcOpenEventHandle(&s[i].ipc_event,
-                                                 pi->data[team->rank].ev_handle));
-            }
         }
     }
 

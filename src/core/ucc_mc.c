@@ -16,8 +16,9 @@
 #endif
 #define UCC_MC_PROFILE_FUNC UCC_PROFILE_FUNC
 
-static const ucc_mc_ops_t *mc_ops[UCC_MEMORY_TYPE_LAST];
-static const ucc_ee_ops_t *ee_ops[UCC_EE_LAST];
+static const ucc_mc_ops_t          *mc_ops[UCC_MEMORY_TYPE_LAST];
+static const ucc_ee_ops_t          *ee_ops[UCC_EE_LAST];
+static const ucc_ee_executor_ops_t *executor_ops[UCC_EE_LAST];
 
 #define UCC_CHECK_MC_AVAILABLE(mc)                                             \
     do {                                                                       \
@@ -90,8 +91,9 @@ ucc_status_t ucc_mc_init(const ucc_mc_params_t *mc_params)
             }
         }
         mc->ref_cnt++;
-        mc_ops[mc->type] = &mc->ops;
-        ee_ops[mc->ee_type] = &mc->ee_ops;
+        mc_ops[mc->type]          = &mc->ops;
+        ee_ops[mc->ee_type]       = &mc->ee_ops;
+        executor_ops[mc->ee_type] = &mc->executor_ops;
     }
 
     return UCC_OK;
@@ -272,4 +274,34 @@ ucc_status_t ucc_mc_ee_task_sync(void *ee_task, ucc_ee_type_t ee_type)
 {
     UCC_CHECK_EE_AVAILABLE(ee_type);
     return ee_ops[ee_type]->ee_task_sync(ee_task);
+}
+
+ucc_status_t ucc_ee_executor_create_post(const ucc_ee_executor_params_t *params,
+                                         ucc_ee_executor_t **executor)
+{
+    return executor_ops[params->ee_type]->executor_create_post(params,
+                                                               executor);
+}
+
+ucc_status_t ucc_ee_executor_create_test(ucc_ee_executor_t *executor)
+{
+    return executor_ops[executor->ee_type]->executor_create_test(executor);
+}
+
+ucc_status_t ucc_ee_executor_destroy(ucc_ee_executor_t *executor)
+{
+    return executor_ops[executor->ee_type]->executor_destroy(executor);
+}
+
+ucc_status_t ucc_ee_executor_task_post(ucc_ee_executor_task_args_t *task_args,
+                                       ucc_ee_executor_task_t **task,
+                                       ucc_ee_executor_t *executor)
+{
+    return executor_ops[executor->ee_type]->executor_task_post(task_args,
+                                                               task, executor);
+}
+
+ucc_status_t ucc_ee_executor_task_test(ucc_ee_executor_task_t *task)
+{
+    return executor_ops[task->eee->ee_type]->executor_task_test(task);
 }
