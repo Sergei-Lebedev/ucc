@@ -32,6 +32,13 @@ typedef enum ucc_mc_task_status {
     UCC_MC_CUDA_TASK_COMPLETED_ACK
 } ucc_mc_task_status_t;
 
+typedef enum ucc_mc_cuda_executor_state {
+    UCC_MC_CUDA_EXECUTOR_POSTED,
+    UCC_MC_CUDA_EXECUTOR_STARTED,
+    UCC_MC_CUDA_EXECUTOR_SHUTDOWN,
+    UCC_MC_CUDA_EXECUTOR_SHUTDOWN_ACK
+} ucc_mc_cuda_executor_state_t;
+
 static inline ucc_status_t cuda_error_to_ucc_status(cudaError_t cu_err)
 {
     switch(cu_err) {
@@ -64,6 +71,7 @@ typedef struct ucc_mc_cuda_config {
     int                            stream_blocking_wait;
     size_t                         mpool_elem_size;
     int                            mpool_max_elems;
+    unsigned long                  exec_num_workers;
 } ucc_mc_cuda_config_t;
 
 typedef struct ucc_mc_cuda {
@@ -71,6 +79,7 @@ typedef struct ucc_mc_cuda {
     cudaStream_t                   stream;
     ucc_mpool_t                    events;
     ucc_mpool_t                    strm_reqs;
+    ucc_mpool_t                    executors;
     ucc_mpool_t                    mpool;
     int                            mpool_init_flag;
     ucc_spinlock_t                 init_spinlock;
@@ -91,6 +100,20 @@ typedef struct ucc_mc_cuda_stream_request {
     uint32_t           *dev_status;
     cudaStream_t        stream;
 } ucc_mc_cuda_stream_request_t;
+
+#define NUM_WORKERS 1
+typedef struct ucc_mc_cuda_executor {
+    ucc_ee_executor_t             super;
+    ucc_mc_cuda_executor_state_t  state;
+    uint8_t                       pidx[NUM_WORKERS];
+    ucc_ee_executor_task_t        tasks[NUM_WORKERS][8];
+    ucc_ee_executor_task_args_t   args;
+    ucc_mc_cuda_executor_state_t *dev_state;
+    uint8_t                      *dev_pidx;
+    ucc_ee_executor_task_t       *dev_tasks;
+    ucc_ee_executor_task_args_t  *dev_args;
+    uint32_t                     task_id;
+} ucc_mc_cuda_executor_t;
 
 ucc_status_t ucc_mc_cuda_reduce(const void *src1, const void *src2,
                                 void *dst, size_t count, ucc_datatype_t dt,

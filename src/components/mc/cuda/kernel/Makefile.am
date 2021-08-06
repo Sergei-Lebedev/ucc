@@ -16,7 +16,8 @@ comp_noinst = libucc_mc_cuda_kernels.la
 
 libucc_mc_cuda_kernels_la_SOURCES  = mc_cuda_reduce.cu \
                                      mc_cuda_reduce_multi.cu \
-                                     mc_cuda_wait_kernel.cu
+                                     mc_cuda_wait_kernel.cu \
+                                     mc_cuda_executor.cu
 libucc_mc_cuda_kernels_la_CPPFLAGS =
 
 noinst_LTLIBRARIES = $(comp_noinst)
