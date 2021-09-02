@@ -30,6 +30,11 @@ static ucc_config_field_t ucc_cl_hier_lib_config_table[] = {
      ucc_offsetof(ucc_cl_hier_lib_config_t, sbgp_tls[UCC_HIER_SBGP_FULL]),
      UCC_CONFIG_TYPE_STRING_ARRAY},
 
+    {"A2AV_NODE_THRESH", "0",
+     "Messages larger than that threshold will be sent via node sbgp tl",
+     ucc_offsetof(ucc_cl_hier_lib_config_t, a2av_node_thresh),
+     UCC_CONFIG_TYPE_MEMUNITS},
+
     {NULL}
 };
 

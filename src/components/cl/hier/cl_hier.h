@@ -34,6 +34,7 @@ typedef struct ucc_cl_hier_lib_config {
        sbgp. The result collective selection in that team will be
        based on the correpsponding tl scores. */
     ucc_config_names_array_t sbgp_tls[UCC_HIER_SBGP_LAST];
+    size_t                   a2av_node_thresh;
 } ucc_cl_hier_lib_config_t;
 
 typedef struct ucc_cl_hier_context_config {
