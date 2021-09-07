@@ -11,7 +11,8 @@ sources =                 \
 	tl_cuda_ipc_coll.h    \
 	tl_cuda_ipc_coll.c    \
 	tl_cuda_ipc_cache.h   \
-	tl_cuda_ipc_cache.c
+	tl_cuda_ipc_cache.c   \
+	reduce_scatter/reduce_scatter_ring.c
 
 module_LTLIBRARIES = libucc_tl_cuda_ipc.la
 libucc_tl_cuda_ipc_la_SOURCES  = $(sources)

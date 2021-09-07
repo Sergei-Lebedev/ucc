@@ -21,6 +21,19 @@ extern "C" {
 #define align_pow2(_n, _p) ((_n) & ((_p) - 1))
 
 template <typename T>
+__device__ void executor_reduce(const T* __restrict__ s1,
+                                const T* __restrict__ s2,
+                                T* __restrict__ d, size_t count)
+{
+    size_t start = threadIdx.x;
+    const size_t step  = blockDim.x;
+
+    for (size_t i = start; i < count; i+=step) {
+        d[i] = s1[i] + s2[i];
+    }
+}
+
+template <typename T>
 __device__ void executor_copy(T* __restrict__ d, T* __restrict__ s,
                               size_t count)
 {
@@ -101,8 +114,10 @@ __global__ void executor_kernel(volatile ucc_mc_cuda_executor_t *eee)
         }
         switch (task->args.task_type) {
             case UCC_MC_EE_EXECUTOR_TASK_TYPE_REDUCE:
-                break;
-            case UCC_MC_EE_EXECUTOR_TASK_TYPE_REDUCE_MULTI:
+                executor_reduce<float>((float*)task->args.src1.buffer,
+                                       (float*)task->args.src2.buffer,
+                                       (float*)task->args.dst.buffer,
+                                       task->args.dst.count);
                 break;
             case UCC_MC_EE_EXECUTOR_TASK_TYPE_COPY:
                 if (aligned) {
@@ -119,6 +134,7 @@ __global__ void executor_kernel(volatile ucc_mc_cuda_executor_t *eee)
         }
 
         __syncthreads();
+        __threadfence_system();
         if (tid % num_threads == 0) {
             cidx = (cidx + 1) % 8;
             task->status = UCC_OK;

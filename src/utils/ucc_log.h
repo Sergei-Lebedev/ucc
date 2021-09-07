@@ -60,6 +60,8 @@ static inline const char* ucc_coll_type_str(ucc_coll_type_t ct)
         return "Allreduce";
     case UCC_COLL_TYPE_REDUCE:
         return "Reduce";
+    case UCC_COLL_TYPE_REDUCE_SCATTER:
+        return "Reduce Scatter";
     case UCC_COLL_TYPE_ALLTOALL:
         return "Alltoall";
     case UCC_COLL_TYPE_ALLTOALLV:

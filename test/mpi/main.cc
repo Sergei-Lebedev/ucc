@@ -113,6 +113,8 @@ static ucc_coll_type_t coll_str_to_type(std::string coll)
         return UCC_COLL_TYPE_ALLTOALL;
     } else if (coll == "alltoallv") {
         return UCC_COLL_TYPE_ALLTOALLV;
+    } else if (coll == "reduce_scatter") {
+        return UCC_COLL_TYPE_REDUCE_SCATTER;
     } else {
         std::cerr << "incorrect coll type: " << coll << std::endl;
         PrintHelp();

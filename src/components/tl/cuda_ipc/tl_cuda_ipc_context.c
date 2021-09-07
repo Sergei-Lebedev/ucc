@@ -28,6 +28,14 @@ static ucc_mpool_ops_t ucc_tl_cuda_ipc_req_mpool_ops = {
     .obj_cleanup   = NULL
 };
 
+//TODO can we merge it with req mpool?
+static ucc_mpool_ops_t ucc_tl_cuda_ipc_schedule_mpool_ops = {
+    .chunk_alloc   = ucc_mpool_hugetlb_malloc,
+    .chunk_release = ucc_mpool_hugetlb_free,
+    .obj_init      = NULL,
+    .obj_cleanup   = NULL
+};
+
 UCC_CLASS_INIT_FUNC(ucc_tl_cuda_ipc_context_t,
                     const ucc_base_context_params_t *params,
                     const ucc_base_config_t *config)
@@ -48,6 +56,17 @@ UCC_CLASS_INIT_FUNC(ucc_tl_cuda_ipc_context_t,
     if (status != UCC_OK) {
         tl_error(self->super.super.lib,
                  "failed to initialize tl_cuda_ipc_req mpool");
+        return status;
+    }
+    status = ucc_mpool_init(&self->schedule_mp, 0,
+                            sizeof(ucc_tl_cuda_ipc_schedule_t), 0,
+                            UCC_CACHE_LINE_SIZE, 8, UINT_MAX,
+                            &ucc_tl_cuda_ipc_schedule_mpool_ops,
+                            params->thread_mode, "tl_cuda_ipc_schedule_mp");
+
+    if (status != UCC_OK) {
+        tl_error(self->super.super.lib,
+                 "failed to initialize tl_cuda_ipc_schedule mpool");
         return status;
     }
 

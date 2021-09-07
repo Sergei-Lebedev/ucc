@@ -59,6 +59,7 @@ typedef struct ucc_tl_cuda_ipc_context {
     ucc_tl_context_t                 super;
     ucc_tl_cuda_ipc_context_config_t cfg;
     ucc_mpool_t                      req_mp;
+    ucc_mpool_t                      schedule_mp;
     tl_cuda_ipc_ep_hash_t           *ipc_cache;
 } ucc_tl_cuda_ipc_context_t;
 UCC_CLASS_DECLARE(ucc_tl_cuda_ipc_context_t, const ucc_base_context_params_t *,
