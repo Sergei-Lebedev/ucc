@@ -782,6 +782,7 @@ ucc_status_t ucc_cuda_executor_create_post(const ucc_ee_executor_params_t *param
     ucc_status_t status;
     int i;
 
+    mc_info(&ucc_mc_cuda.super, "CUDA executor create post, eee: %p", eee);
     ucc_assert(eee);
     eee->super.ee_context = params->ee_context;
     eee->super.ee_type    = params->ee_type;
@@ -848,7 +849,7 @@ ucc_status_t ucc_cuda_executor_destroy(ucc_ee_executor_t *executor)
     *st = UCC_MC_CUDA_EXECUTOR_SHUTDOWN;
     while(*st != UCC_MC_CUDA_EXECUTOR_SHUTDOWN_ACK) { }
     ucc_mpool_put(eee);
-    mc_info(&ucc_mc_cuda.super, "CUDA executor destroyed. eee:%p", eee);
+    mc_info(&ucc_mc_cuda.super, "CUDA executor destroyed, eee: %p", eee);
     return UCC_OK;
 }
 
