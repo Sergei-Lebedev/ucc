@@ -152,7 +152,17 @@ ucc_status_t ucc_tl_cuda_ipc_team_get_scores(ucc_base_team_t   *tl_team,
                                       UCC_TL_CUDA_IPC_DEFAULT_SCORE,
                                       ucc_tl_cuda_ipc_alltoallv_init, tl_team);
     if (UCC_OK != status) {
-        tl_error(lib, "faild to add range to score_t");
+        tl_error(lib, "faild to add alltoallv range to score_t");
+        return status;
+    }
+
+    status = ucc_coll_score_add_range(score, UCC_COLL_TYPE_REDUCE_SCATTER,
+                                      UCC_MEMORY_TYPE_CUDA, 0, UCC_MSG_MAX,
+                                      UCC_TL_CUDA_IPC_DEFAULT_SCORE,
+                                      ucc_tl_cuda_ipc_reduce_scatter_init,
+                                      tl_team);
+    if (UCC_OK != status) {
+        tl_error(lib, "faild to add reduce scatter range to score_t");
         return status;
     }
 

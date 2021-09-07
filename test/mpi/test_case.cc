@@ -45,6 +45,9 @@ std::shared_ptr<TestCase> TestCase::init(ucc_coll_type_t _type,
     case UCC_COLL_TYPE_ALLTOALLV:
         return std::make_shared<TestAlltoallv>(msgsize, inplace, mt, _team,
                                                max_size, count_bits, displ_bits);
+    case UCC_COLL_TYPE_REDUCE_SCATTER:
+        return std::make_shared<TestReduceScatter>(msgsize, inplace, dt,
+                                                   op, mt, _team, max_size);
     default:
         break;
     }
