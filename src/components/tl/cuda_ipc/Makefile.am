@@ -2,17 +2,20 @@
 # Copyright (C) Mellanox Technologies Ltd. 2021.  ALL RIGHTS RESERVED.
 #
 
-sources =                 \
-	tl_cuda_ipc.h         \
-	tl_cuda_ipc.c         \
-	tl_cuda_ipc_lib.c     \
-	tl_cuda_ipc_context.c \
-	tl_cuda_ipc_team.c    \
-	tl_cuda_ipc_coll.h    \
-	tl_cuda_ipc_coll.c    \
-	tl_cuda_ipc_cache.h   \
-	tl_cuda_ipc_cache.c   \
-	reduce_scatter/reduce_scatter_ring.c
+sources =                                \
+	tl_cuda_ipc.h                        \
+	tl_cuda_ipc.c                        \
+	tl_cuda_ipc_lib.c                    \
+	tl_cuda_ipc_context.c                \
+	tl_cuda_ipc_team.c                   \
+	tl_cuda_ipc_coll.h                   \
+	tl_cuda_ipc_coll.c                   \
+	tl_cuda_ipc_cache.h                  \
+	tl_cuda_ipc_cache.c                  \
+	tl_cuda_ipc_ring.h                   \
+	tl_cuda_ipc_ring.c                   \
+	reduce_scatter/reduce_scatter_ring.c \
+	allgather/allgather_ring.c
 
 module_LTLIBRARIES = libucc_tl_cuda_ipc.la
 libucc_tl_cuda_ipc_la_SOURCES  = $(sources)
