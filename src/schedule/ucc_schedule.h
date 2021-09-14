@@ -108,6 +108,7 @@ ucc_status_t ucc_schedule_finalize(ucc_coll_task_t *task);
 ucc_status_t ucc_dependency_handler(ucc_coll_task_t *parent, /* NOLINT */
                                     ucc_coll_task_t *task);
 
+ucc_status_t ucc_schedule_post(ucc_coll_task_t *task);
 static inline ucc_status_t ucc_task_complete(ucc_coll_task_t *task)
 {
     ucc_status_t status = task->super.status;

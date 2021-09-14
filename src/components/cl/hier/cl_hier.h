@@ -35,6 +35,11 @@ typedef struct ucc_cl_hier_lib_config {
        based on the correpsponding tl scores. */
     ucc_config_names_array_t sbgp_tls[UCC_HIER_SBGP_LAST];
     size_t                   a2av_node_thresh;
+    uint32_t                 allreduce_hybrid_n_frags;
+    uint32_t                 allreduce_hybrid_pipeline_depth;
+    uint32_t                 allreduce_hybrid_seq;
+    size_t                   allreduce_hybrid_frag_thresh;
+    size_t                   allreduce_hybrid_frag_size;
 } ucc_cl_hier_lib_config_t;
 
 typedef struct ucc_cl_hier_context_config {
@@ -102,6 +107,10 @@ ucc_status_t ucc_cl_hier_coll_init(ucc_base_coll_args_t *coll_args,
     (ucc_derived_of((_team)->super.super.context->lib, ucc_cl_hier_lib_t))
 
 ucc_status_t ucc_cl_hier_alltoallv_init(ucc_base_coll_args_t *coll_args,
+                                        ucc_base_team_t *team,
+                                        ucc_coll_task_t **task);
+
+ucc_status_t ucc_cl_hier_allreduce_init(ucc_base_coll_args_t *coll_args,
                                         ucc_base_team_t *team,
                                         ucc_coll_task_t **task);
 
