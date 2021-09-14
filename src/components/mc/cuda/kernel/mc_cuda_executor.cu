@@ -10,7 +10,6 @@ extern "C" {
 
 #include "../mc_cuda.h"
 #include "utils/ucc_math.h"
-
 #include <inttypes.h>
 
 #ifdef __cplusplus
@@ -19,6 +18,40 @@ extern "C" {
 
 
 #define align_pow2(_n, _p) ((_n) & ((_p) - 1))
+
+__device__ inline void add_float4(float4 &d, const float4 &x, const float4 &y)
+{
+    d.x = x.x + y.x;
+    d.y = x.y + y.y;
+    d.z = x.z + y.z;
+    d.w = x.w + y.w;
+}
+
+__device__ inline void add_float4(float4 &x, const float4 &y)
+{
+    x.x += y.x;
+    x.y += y.y;
+    x.z += y.z;
+    x.w += y.w;
+}
+
+__device__ void executor_reduce_float(const float *s1, const float *s2,
+                                      float *d, size_t count)
+{
+    const float4 *s14 = (const float4*)s1;
+    const float4 *s24 = (const float4*)s2;
+    float4       *d4  = (float4*)d;
+    const size_t idx = threadIdx.x;
+    const size_t step = blockDim.x;
+    const int n = count / 4;
+    const int num_iter = n / step + ((idx < n % step) ? 1 : 0);
+
+    for(int i = 0; i < num_iter; i++) {
+        float4 d  = d4[i * step + idx];
+        add_float4(d, s14[i * step + idx], s24[i * step + idx]);
+        d4[i * step + idx] = d;
+    }
+}
 
 template <typename T>
 __device__ void executor_reduce(const T* __restrict__ s1,
@@ -114,10 +147,15 @@ __global__ void executor_kernel(volatile ucc_mc_cuda_executor_t *eee)
         }
         switch (task->args.task_type) {
             case UCC_MC_EE_EXECUTOR_TASK_TYPE_REDUCE:
-                executor_reduce<float>((float*)task->args.src1.buffer,
-                                       (float*)task->args.src2.buffer,
-                                       (float*)task->args.dst.buffer,
-                                       task->args.dst.count);
+                // executor_reduce<float>((float*)task->args.src1.buffer,
+                //                        (float*)task->args.src2.buffer,
+                //                        (float*)task->args.dst.buffer,
+                //                        task->args.dst.count);
+                executor_reduce_float((float*)task->args.src1.buffer,
+                                      (float*)task->args.src2.buffer,
+                                      (float*)task->args.dst.buffer,
+                                      task->args.dst.count);
+
                 break;
             case UCC_MC_EE_EXECUTOR_TASK_TYPE_COPY:
                 if (aligned) {
