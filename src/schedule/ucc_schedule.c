@@ -155,3 +155,9 @@ ucc_status_t ucc_schedule_finalize(ucc_coll_task_t *task)
     }
     return status_overall;
 }
+
+ucc_status_t ucc_schedule_post(ucc_coll_task_t *task)
+{
+    ucc_schedule_t *schedule = ucc_derived_of(task, ucc_schedule_t);
+    return ucc_schedule_start(schedule);
+}
