@@ -27,6 +27,7 @@ extern ucc_tl_cuda_ipc_iface_t ucc_tl_cuda_ipc;
 typedef struct ucc_tl_cuda_ipc_lib_config {
     ucc_tl_lib_config_t super;
     uint32_t            max_concurrent;
+    uint32_t            num_rings;
 } ucc_tl_cuda_ipc_lib_config_t;
 
 
@@ -49,7 +50,7 @@ typedef struct {
 typedef struct {
     void              *d_ptr;
     size_t             size;
-    uint32_t           seq_num[3];
+    uint32_t           seq_num[16];
     cudaIpcMemHandle_t handle;
     size_t             offset;
     mem_info_data_t    data[1];

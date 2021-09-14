@@ -159,6 +159,16 @@ ucc_status_t ucc_tl_cuda_ipc_team_get_scores(ucc_base_team_t   *tl_team,
         return status;
     }
 
+    status = ucc_coll_score_add_range(score, UCC_COLL_TYPE_ALLGATHER,
+                                      UCC_MEMORY_TYPE_CUDA, 0, UCC_MSG_MAX,
+                                      UCC_TL_CUDA_IPC_DEFAULT_SCORE,
+                                      ucc_tl_cuda_ipc_allgather_init,
+                                      tl_team);
+    if (UCC_OK != status) {
+        tl_error(lib, "faild to add allgather range to score_t");
+        return status;
+    }
+
     *score_p = score;
     return UCC_OK;
 }

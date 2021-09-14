@@ -23,6 +23,11 @@ static ucc_config_field_t ucc_tl_cuda_ipc_lib_config_table[] = {
      ucc_offsetof(ucc_tl_cuda_ipc_lib_config_t, max_concurrent),
      UCC_CONFIG_TYPE_UINT},
 
+    {"NUM_RINGS", "1",
+     "Number of communication channels in ring algorithms",
+     ucc_offsetof(ucc_tl_cuda_ipc_lib_config_t, num_rings),
+     UCC_CONFIG_TYPE_UINT},
+
     {NULL}};
 
 static ucs_config_field_t ucc_tl_cuda_ipc_context_config_table[] = {
