@@ -187,7 +187,7 @@ ucc_status_t ucc_schedule_pipelined_init(
             if (n_frags > 1 && sequential) {
                 ucc_event_manager_subscribe(
                     &frags[(i > 0) ? (i - 1) : (n_frags - 1)]->tasks[j]->em,
-                    UCC_EVENT_COMPLETED, frags[i]->tasks[j],
+                    UCC_EVENT_SCHEDULE_STARTED, frags[i]->tasks[j],
                     ucc_dependency_handler);
                 frags[i]->tasks[j]->n_deps_base++;
             }
