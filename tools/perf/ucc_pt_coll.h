@@ -116,7 +116,8 @@ class ucc_pt_coll_reduce_scatter: public ucc_pt_coll {
     int comm_size;
 public:
     ucc_pt_coll_reduce_scatter(int size, ucc_datatype_t dt, ucc_memory_type mt,
-                               ucc_reduction_op_t op, bool is_inplace);
+                               ucc_reduction_op_t op, bool is_inplace,
+                               ucc_pt_comm *communicator);
     ucc_status_t init_coll_args(size_t count, ucc_coll_args_t &args) override;
     void free_coll_args(ucc_coll_args_t &args) override;
     float get_bw(float time_ms, int grsize, ucc_coll_args_t args) override;
