@@ -8,7 +8,8 @@ ucc_pt_coll_reduce_scatter::ucc_pt_coll_reduce_scatter(int size,
                                                        ucc_datatype_t dt,
                                                        ucc_memory_type mt,
                                                        ucc_reduction_op_t op,
-                                                       bool is_inplace)
+                                                       bool is_inplace,
+                                                       ucc_pt_comm *communicator) : ucc_pt_coll(communicator)
 {
     has_inplace_   = true;
     has_reduction_ = true;
