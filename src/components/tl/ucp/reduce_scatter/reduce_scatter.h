@@ -8,6 +8,32 @@
 #include "../tl_ucp.h"
 #include "../tl_ucp_coll.h"
 
+enum {
+    UCC_TL_UCP_REDUCE_SCATTER_ALG_KNOMIAL,
+        UCC_TL_UCP_REDUCE_SCATTER_ALG_LAST
+
+};
+
+extern ucc_base_coll_alg_info_t
+ucc_tl_ucp_reduce_scatter_algs[UCC_TL_UCP_REDUCE_SCATTER_ALG_LAST + 1];
+
+#define UCC_TL_UCP_REDUCE_SCATTER_DEFAULT_ALG_SELECT_STR                            \
+        "reduce_scatter:@0"
+
+static inline int ucc_tl_ucp_reduce_scatter_alg_from_str(const char *str)
+{
+    int i;
+    for (i = 0; i < UCC_TL_UCP_REDUCE_SCATTER_ALG_LAST; i++) {
+        if (0 == strcasecmp(str, ucc_tl_ucp_reduce_scatter_algs[i].name)) {
+            break;
+
+        }
+
+    }
+    return i;
+
+}
+
 /* Base interface signature: uses reduce_scatter_kn_radix from config. */
 
 ucc_status_t

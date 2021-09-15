@@ -14,7 +14,7 @@
 #include "tl_ucp_tag.h"
 #include "core/ucc_team.h"
 
-#define UCC_TL_UCP_N_DEFAULT_ALG_SELECT_STR 1
+#define UCC_TL_UCP_N_DEFAULT_ALG_SELECT_STR 3
 extern const char
     *ucc_tl_ucp_default_alg_select_str[UCC_TL_UCP_N_DEFAULT_ALG_SELECT_STR];
 

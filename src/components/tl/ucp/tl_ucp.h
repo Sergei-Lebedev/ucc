@@ -103,7 +103,8 @@ UCC_CLASS_DECLARE(ucc_tl_ucp_team_t, ucc_base_context_t *,
     (UCC_COLL_TYPE_ALLTOALL  | UCC_COLL_TYPE_ALLTOALLV  |  \
      UCC_COLL_TYPE_ALLGATHER | UCC_COLL_TYPE_ALLGATHERV |  \
      UCC_COLL_TYPE_ALLREDUCE | UCC_COLL_TYPE_BCAST      |  \
-     UCC_COLL_TYPE_BARRIER   | UCC_COLL_TYPE_REDUCE)
+     UCC_COLL_TYPE_BARRIER   | UCC_COLL_TYPE_REDUCE     |  \
+     UCC_COLL_TYPE_REDUCE_SCATTER)
 
 #define UCC_TL_UCP_TEAM_LIB(_team)                                             \
     (ucc_derived_of((_team)->super.super.context->lib, ucc_tl_ucp_lib_t))
