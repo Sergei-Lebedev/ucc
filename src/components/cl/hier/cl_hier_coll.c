@@ -231,6 +231,7 @@ ucc_status_t ucc_cl_hier_alltoallv_init(ucc_base_coll_args_t *coll_args,
 
 typedef struct ucc_cl_hier_ar_hybrid_schedule {
     ucc_schedule_pipelined_t super;
+    ucc_ee_executor_t       *eee;
     /* ucc_ee_h ee[3]; */
 } ucc_cl_hier_ar_hybrid_schedule_t;
 
@@ -257,6 +258,9 @@ static ucc_status_t ucc_cl_hier_ar_hybrid_schedule_finalize(ucc_coll_task_t *tas
     /*                   UCC_EE_CUDA_STREAM : UCC_EE_CPU_THREAD); */
     /* } */
     status = ucc_schedule_pipelined_finalize(&schedule->super.super.super);
+    /* if (schedule->eee) { */
+    /*     ucc_ee_executor_destroy(schedule->eee); */
+    /* } */
     ucc_free(schedule);
     return status;
 }
@@ -376,6 +380,7 @@ ucc_status_t ucc_cl_hier_allreduce_hybrid_frag_init(ucc_base_coll_args_t *coll_a
     args.args.dst.info.buffer = coll_args->args.dst.info.buffer;
     args.args.dst.info.datatype = coll_args->args.src.info.datatype;
     args.args.dst.info.count = coll_args->args.src.info.count;
+
     // used to be UCC_HIER_SBGP_NODE2 - for parallelism with NCCL 
     status = ucc_coll_score_map_lookup(cl_team->sbgps[UCC_HIER_SBGP_NODE].score_map,
                                        &args, &init, &bteam);
@@ -441,6 +446,14 @@ static ucc_status_t ucc_cl_hier_hybrid_allreduce_post(ucc_coll_task_t *task)
     return ucc_schedule_pipelined_post(task);
 }
 
+void ucc_cl_hier_allreduce_schedule_done(void *data, ucc_status_t status)
+{
+    ucc_cl_hier_ar_hybrid_schedule_t *schedule = data;
+    if (schedule->eee) {
+        ucc_ee_executor_destroy(schedule->eee);
+    }
+}
+
 ucc_status_t ucc_cl_hier_allreduce_init(ucc_base_coll_args_t *coll_args,
                                     ucc_base_team_t *team,
                                     ucc_coll_task_t **task)
@@ -461,14 +474,43 @@ ucc_status_t ucc_cl_hier_allreduce_init(ucc_base_coll_args_t *coll_args,
     /*     ucc_mc_ee_get(&schedule->ee[i], (mt == UCC_MEMORY_TYPE_CUDA) ? */
     /*                   UCC_EE_CUDA_STREAM : UCC_EE_CPU_THREAD); */
     /* } */
+#if 1
+    ucc_ee_executor_params_t exec_params;
+    ucc_ee_executor_t *eee;
+    ucc_status_t status;
+    exec_params.ee_type = UCC_EE_CUDA_STREAM;
+    exec_params.ee_context = NULL;
+    status = ucc_ee_executor_create_post(&exec_params, &eee);
+    if (ucc_unlikely(status != UCC_OK)) {
+        cl_error(team->context->lib, "failed to create ee executor");
+        return status;
+    }
 
+    //TODO: make nonblocking?
+    do {
+        status = ucc_ee_executor_create_test(eee);
+    } while (status == UCC_INPROGRESS);
 
+    if (ucc_unlikely(status != UCC_OK)) {
+        cl_error(team->context->lib, "failed to create ee executor");
+        return status;
+    }
+
+    schedule->eee = eee;
+    coll_args->mask |= UCC_BASE_COLL_ARGS_FIELD_EEE;
+    coll_args->eee = eee;
+#else
+    schedule->eee = NULL;
+#endif
     get_hybrid_n_frags(coll_args, cl_team, &n_frags, &pipeline_depth);
     ucc_schedule_pipelined_init(coll_args, team,
                                 ucc_cl_hier_allreduce_hybrid_frag_init,
                                 ucc_cl_hier_allreduce_hybrid_setup_frag,
                                 pipeline_depth, n_frags, cfg->allreduce_hybrid_seq,
                                 &schedule->super);
+    schedule->super.super.super.flags |= UCC_COLL_TASK_FLAG_CB2;
+    schedule->super.super.super.cb2.cb = ucc_cl_hier_allreduce_schedule_done;
+    schedule->super.super.super.cb2.data = (void*)schedule;
 
     schedule->super.super.super.post = ucc_cl_hier_hybrid_allreduce_post;
     schedule->super.super.super.triggered_post = ucc_core_triggered_post;

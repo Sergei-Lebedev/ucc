@@ -116,11 +116,17 @@ typedef struct ucc_base_team_iface {
 } ucc_base_team_iface_t;
 
 typedef struct ucc_team ucc_team_t;
+typedef struct ucc_ee_executor ucc_ee_executor_t;
+
+enum {
+    UCC_BASE_COLL_ARGS_FIELD_EEE = UCC_BIT(1),
+};
 
 typedef struct ucc_base_coll_args {
-    uint64_t        mask;
-    ucc_coll_args_t args;
-    ucc_team_t     *team;
+    uint64_t           mask;
+    ucc_coll_args_t    args;
+    ucc_team_t        *team;
+    ucc_ee_executor_t *eee;
 } ucc_base_coll_args_t;
 
 typedef ucc_status_t (*ucc_base_coll_init_fn_t)(ucc_base_coll_args_t *coll_args,

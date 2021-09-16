@@ -48,6 +48,7 @@ ucc_status_t ucc_tl_ucp_allgather_knomial_progress(ucc_coll_task_t *coll_task)
             ucc_tl_ucp_recv_nb(rbuf, data_size, mem_type, peer, team, task),
             task, out);
     }
+UCC_KN_PHASE_REDUCE:
 UCC_KN_PHASE_EXTRA:
     if (KN_NODE_EXTRA == node_type) {
         if (UCC_INPROGRESS == ucc_tl_ucp_test(task)) {
@@ -143,6 +144,7 @@ ucc_status_t ucc_tl_ucp_allgather_knomial_start(ucc_coll_task_t *coll_task)
     offset = ucc_sra_kn_get_offset(args->dst.info.count,
                                    ucc_dt_size(args->dst.info.datatype), rank,
                                    size, radix);
+
     if (!UCC_IS_INPLACE(*args)) {
         status = ucc_mc_memcpy(
             PTR_OFFSET(args->dst.info.buffer, offset), args->src.info.buffer,
