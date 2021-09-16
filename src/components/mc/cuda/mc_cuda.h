@@ -101,7 +101,7 @@ typedef struct ucc_mc_cuda_stream_request {
     cudaStream_t        stream;
 } ucc_mc_cuda_stream_request_t;
 
-#define NUM_WORKERS 4
+#define NUM_WORKERS 8
 typedef struct ucc_mc_cuda_executor {
     ucc_ee_executor_t             super;
     ucc_mc_cuda_executor_state_t  state;

@@ -150,6 +150,7 @@ UCC_KN_PHASE_EXTRA:
         goto completion;
     }
 
+UCC_KN_PHASE_REDUCE:
 UCC_KN_PHASE_PROXY:
     if (UCC_INPROGRESS == ucc_tl_ucp_test(task)) {
         SAVE_STATE(UCC_KN_PHASE_PROXY);

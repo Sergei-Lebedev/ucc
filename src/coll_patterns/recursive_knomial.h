@@ -157,7 +157,8 @@ enum {
     UCC_KN_PHASE_INIT,
     UCC_KN_PHASE_LOOP,  /* main loop of recursive k-ing */
     UCC_KN_PHASE_EXTRA, /* recv from extra rank */
-    UCC_KN_PHASE_PROXY  /* recv from extra rank */
+    UCC_KN_PHASE_PROXY,  /* recv from extra rank */
+    UCC_KN_PHASE_REDUCE  /* nb reduction */
 };
 
 #define UCC_KN_CHECK_PHASE(_p)                                                 \
@@ -171,6 +172,7 @@ enum {
             UCC_KN_CHECK_PHASE(UCC_KN_PHASE_EXTRA);                            \
             UCC_KN_CHECK_PHASE(UCC_KN_PHASE_LOOP);                             \
             UCC_KN_CHECK_PHASE(UCC_KN_PHASE_PROXY);                            \
+            UCC_KN_CHECK_PHASE(UCC_KN_PHASE_REDUCE);                           \
         case UCC_KN_PHASE_INIT:                                                \
             break;                                                             \
         };                                                                     \

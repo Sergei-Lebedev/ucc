@@ -49,6 +49,7 @@ TestAllgather::TestAllgather(size_t _msgsize, ucc_test_mpi_inplace_t _inplace,
                     single_rank_count, TEST_DT, UCC_MEMORY_TYPE_HOST, rank);
     }
 
+
     args.src.info.buffer   = sbuf;
     args.src.info.count    = single_rank_count;
     args.src.info.datatype = TEST_DT;

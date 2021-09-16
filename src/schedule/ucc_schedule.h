@@ -26,6 +26,7 @@ typedef ucc_status_t (*ucc_task_event_handler_p)(ucc_coll_task_t *parent,
 typedef ucc_status_t (*ucc_coll_post_fn_t)(ucc_coll_task_t *task);
 typedef ucc_status_t (*ucc_coll_triggered_post_fn_t)(ucc_ee_h ee, ucc_ev_t *ev, ucc_coll_task_t *task);
 typedef ucc_status_t (*ucc_coll_finalize_fn_t)(ucc_coll_task_t *task);
+typedef ucc_status_t (*ucc_coll_post_fn_t)(ucc_coll_task_t *task);
 
 typedef struct ucc_em_listener {
     ucc_coll_task_t          *task;
@@ -39,7 +40,8 @@ typedef struct ucc_event_manager {
 
 enum {
     UCC_COLL_TASK_FLAG_INTERNAL = UCC_BIT(0),
-    UCC_COLL_TASK_FLAG_CB       = UCC_BIT(1)
+    UCC_COLL_TASK_FLAG_CB       = UCC_BIT(1),
+    UCC_COLL_TASK_FLAG_CB2      = UCC_BIT(2)
 };
 
 typedef struct ucc_coll_task {
@@ -52,6 +54,7 @@ typedef struct ucc_coll_task {
     ucc_coll_triggered_post_fn_t triggered_post;
     ucc_coll_finalize_fn_t       finalize;
     ucc_coll_callback_t          cb;
+    ucc_coll_callback_t          cb2;
     ucc_event_manager_t          em;
     ucc_status_t               (*progress)(struct ucc_coll_task *self);
     struct ucc_schedule         *schedule;
@@ -126,6 +129,9 @@ static inline ucc_status_t ucc_task_complete(ucc_coll_task_t *task)
 
     if (task->flags & UCC_COLL_TASK_FLAG_CB) {
         task->cb.cb(task->cb.data, status);
+    }
+    if (task->flags & UCC_COLL_TASK_FLAG_CB2) {
+        task->cb2.cb(task->cb2.data, status);
     }
 
     if (task->flags & UCC_COLL_TASK_FLAG_INTERNAL) {

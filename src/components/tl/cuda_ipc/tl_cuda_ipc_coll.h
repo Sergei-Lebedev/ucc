@@ -52,6 +52,7 @@ typedef struct ucc_tl_cuda_ipc_task {
 
 typedef struct ucc_tl_cuda_ipc_schedule {
     ucc_schedule_t super;
+    int            eee_external;
     union {
         struct {
             ucc_ee_executor_t *eee;

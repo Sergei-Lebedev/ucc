@@ -50,7 +50,7 @@ ucc_schedule_pipelined_completed_handler(ucc_coll_task_t *parent_task, //NOLINT
     ucc_assert(frag->super.super.status == UCC_OK);
     if (schedule->super.n_completed_tasks == schedule->super.n_tasks) {
         schedule->super.super.super.status = UCC_OK;
-        ucc_event_manager_notify(&schedule->super.super, UCC_EVENT_COMPLETED);
+        ucc_task_complete(task);
         return UCC_OK;
     }
     while ((schedule->super.n_completed_tasks + schedule->n_frags_in_pipeline <

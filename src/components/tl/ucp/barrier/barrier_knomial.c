@@ -42,6 +42,7 @@ ucc_status_t ucc_tl_ucp_barrier_knomial_progress(ucc_coll_task_t *coll_task)
         UCPCHECK_GOTO(ucc_tl_ucp_recv_nb(NULL, 0, mtype, peer, team, task),
                       task, out);
     }
+UCC_KN_PHASE_REDUCE:
 UCC_KN_PHASE_EXTRA:
     if (KN_NODE_PROXY == node_type || KN_NODE_EXTRA == node_type) {
         if (UCC_INPROGRESS == ucc_tl_ucp_test(task)) {

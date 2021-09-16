@@ -782,9 +782,10 @@ ucc_status_t ucc_cuda_executor_create_post(const ucc_ee_executor_params_t *param
     ucc_status_t status;
     int i;
 
+    UCC_MC_CUDA_INIT_STREAM();
     mc_info(&ucc_mc_cuda.super, "CUDA executor create post, eee: %p", eee);
     ucc_assert(eee);
-    eee->super.ee_context = params->ee_context;
+    eee->super.ee_context = (NULL == params->ee_context) ? ucc_mc_cuda.stream : params->ee_context;
     eee->super.ee_type    = params->ee_type;
     eee->state            = UCC_MC_CUDA_EXECUTOR_POSTED;
     eee->task_id          = 0;
@@ -833,6 +834,7 @@ ucc_status_t ucc_cuda_executor_task_post(ucc_ee_executor_task_args_t *task_args,
     memcpy(&ee_task->args, task_args, sizeof(ucc_ee_executor_task_args_t));
     eee->pidx[worker_id] = (eee->pidx[worker_id] + 1) % 8;
     eee->task_id += 1;
+
     *task = ee_task;
     return UCC_OK;
 }
