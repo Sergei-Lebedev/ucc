@@ -474,7 +474,7 @@ ucc_status_t ucc_cl_hier_allreduce_init(ucc_base_coll_args_t *coll_args,
     /*     ucc_mc_ee_get(&schedule->ee[i], (mt == UCC_MEMORY_TYPE_CUDA) ? */
     /*                   UCC_EE_CUDA_STREAM : UCC_EE_CPU_THREAD); */
     /* } */
-#if 1
+#if 0
     ucc_ee_executor_params_t exec_params;
     ucc_ee_executor_t *eee;
     ucc_status_t status;
