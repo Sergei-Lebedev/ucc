@@ -16,7 +16,6 @@ extern "C" {
 }
 #endif
 
-
 #define align_pow2(_n, _p) ((_n) & ((_p) - 1))
 
 __device__ inline void add_float4(float4 &d, const float4 &x, const float4 &y)
@@ -101,6 +100,7 @@ __device__ void executor_copy_aligned(T* __restrict__ d, T* __restrict__ s,
 
 __global__ void executor_start(volatile ucc_mc_cuda_executor_t *eee)
 {
+    *eee->next_worker = 0;
     *eee->dev_state = UCC_MC_CUDA_EXECUTOR_STARTED;
 }
 
@@ -109,40 +109,49 @@ __global__ void executor_shutdown_ack(volatile ucc_mc_cuda_executor_t *eee)
     *eee->dev_state = UCC_MC_CUDA_EXECUTOR_SHUTDOWN_ACK;
 }
 
+
 __global__ void executor_kernel(volatile ucc_mc_cuda_executor_t *eee)
 {
     const uint32_t    tid         = blockIdx.x * blockDim.x + threadIdx.x;
     const uint32_t    worker_id   = blockIdx.x;
     const uint32_t    num_threads = blockDim.x;
-    uint8_t           cidx        = 0;
+    const uint32_t    num_workers = gridDim.x;
+//    uint8_t           cidx        = 0;
     volatile uint8_t *pidx;
+    volatile int     *cidx = eee->next_worker;
+    bool is_master = (tid % num_threads == 0) ? true: false;
     volatile ucc_mc_cuda_executor_state_t *state;
     __shared__ ucc_ee_executor_task_t *task;
-    __shared__ bool worker_done[NUM_WORKERS];
+    __shared__ bool worker_done;
     __shared__ bool aligned;
 
-    if (tid % num_threads == 0) {
+    if (is_master) {
         state = eee->dev_state;
-        pidx  = &eee->dev_pidx[worker_id];
-        worker_done[worker_id] = false;
+        pidx  = eee->dev_pidx;
+        worker_done = false;
     }
 
     while (1) {
-        if (tid % num_threads == 0) {
-            if (cidx == *pidx) {
+        if (is_master) {
+            while ((*cidx % num_workers) != worker_id);
+            if (*cidx == *pidx) {
                 if (*state != UCC_MC_CUDA_EXECUTOR_SHUTDOWN) {
                     continue;
                 }
-                worker_done[worker_id] = true;
+                worker_done = true;
             } else {
-                task = &eee->dev_tasks[worker_id * 8 + cidx];
+                task = &eee->dev_tasks[*cidx % 16];
                 aligned = !(align_pow2((intptr_t)task->args.src1.buffer, 16) ||
                             align_pow2((intptr_t)task->args.dst.buffer, 16));
             }
+            if (*state == UCC_MC_CUDA_EXECUTOR_SHUTDOWN) {
+                worker_done = true;
+            }
+            atomicAdd(eee->next_worker, 1);
         }
 
         __syncthreads();
-        if (worker_done[worker_id]) {
+        if (worker_done) {
             break;
         }
         switch (task->args.task_type) {
@@ -173,8 +182,8 @@ __global__ void executor_kernel(volatile ucc_mc_cuda_executor_t *eee)
 
         __syncthreads();
         __threadfence_system();
-        if (tid % num_threads == 0) {
-            cidx = (cidx + 1) % 8;
+        if (is_master) {
+            //cidx = (cidx + 1) % 8;
             task->status = UCC_OK;
         }
     }
@@ -188,12 +197,13 @@ extern "C" {
 ucc_status_t ucc_mc_cuda_start_executor(ucc_mc_cuda_executor_t *eee)
 {
     executor_start<<<1, 1, 0, (cudaStream_t)(eee->super.ee_context)>>>(eee);
-    executor_kernel<<<NUM_WORKERS, 512, 0, (cudaStream_t)(eee->super.ee_context)>>>(eee);
+    executor_kernel<<<MC_CUDA_CONFIG->exec_num_workers, 512, 0, (cudaStream_t)(eee->super.ee_context)>>>(eee);
     executor_shutdown_ack<<<1, 1, 0, (cudaStream_t)(eee->super.ee_context)>>>(eee);
 
     CUDACHECK(cudaGetLastError());
     return UCC_OK;
 }
+
 
 #ifdef __cplusplus
 }

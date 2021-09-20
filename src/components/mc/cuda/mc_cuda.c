@@ -123,18 +123,24 @@ static void ucc_mc_cuda_ee_executor_init(ucc_mpool_t *mp, void *obj, void *chunk
     CUDA_FUNC(cudaHostGetDevicePointer(
                   (void**)(&eee->dev_state), (void *)&eee->state, 0));
     CUDA_FUNC(cudaHostGetDevicePointer(
-                  (void**)(&eee->dev_pidx), (void *)eee->pidx, 0));
+                  (void**)(&eee->dev_pidx), (void *)&eee->pidx, 0));
     CUDA_FUNC(cudaHostGetDevicePointer(
                   (void**)(&eee->dev_tasks), (void *)eee->tasks, 0));
-    CUDA_FUNC(cudaHostGetDevicePointer(
-                  (void**)(&eee->dev_args), (void *)&eee->args, 0));
+    CUDA_FUNC(cudaMalloc((void**)&eee->next_worker, sizeof(*eee->next_worker)));
+}
+
+static void ucc_mc_cuda_executor_chunk_cleanup(ucc_mpool_t *mp, void *obj)
+{
+    ucc_mc_cuda_executor_t *eee = (ucc_mc_cuda_executor_t*) obj;
+
+    CUDA_FUNC(cudaFree((void*)eee->next_worker));
 }
 
 static ucc_mpool_ops_t ucc_mc_cuda_ee_executor_mpool_ops = {
     .chunk_alloc   = ucc_mc_cuda_ee_executor_mpool_chunk_malloc,
     .chunk_release = ucc_mc_cuda_ee_executor_mpool_chunk_free,
     .obj_init      = ucc_mc_cuda_ee_executor_init,
-    .obj_cleanup   = NULL
+    .obj_cleanup   = ucc_mc_cuda_executor_chunk_cleanup,
 };
 
 static void ucc_mc_cuda_event_init(ucc_mpool_t *mp, void *obj, void *chunk)
@@ -780,7 +786,6 @@ ucc_status_t ucc_cuda_executor_create_post(const ucc_ee_executor_params_t *param
     ucc_mc_cuda_executor_t *eee = ucc_mpool_get(&ucc_mc_cuda.executors);
 //    ucc_mc_cuda_config_t   *cfg = MC_CUDA_CONFIG;
     ucc_status_t status;
-    int i;
 
     UCC_MC_CUDA_INIT_STREAM();
     mc_info(&ucc_mc_cuda.super, "CUDA executor create post, eee: %p", eee);
@@ -789,9 +794,7 @@ ucc_status_t ucc_cuda_executor_create_post(const ucc_ee_executor_params_t *param
     eee->super.ee_type    = params->ee_type;
     eee->state            = UCC_MC_CUDA_EXECUTOR_POSTED;
     eee->task_id          = 0;
-    for (i = 0 ; i < NUM_WORKERS; i++) {
-        eee->pidx[i] = 0;
-    }
+    eee->pidx             = 0;
 
     status = ucc_mc_cuda_start_executor(eee);
     if (status != UCC_OK) {
@@ -824,16 +827,13 @@ ucc_status_t ucc_cuda_executor_task_post(ucc_ee_executor_task_args_t *task_args,
 {
     ucc_mc_cuda_executor_t *eee = ucc_derived_of(executor,
                                                  ucc_mc_cuda_executor_t);
-    uint32_t worker_id;
     ucc_ee_executor_task_t *ee_task;
 
-    worker_id = eee->task_id % NUM_WORKERS;
-    ee_task = &(eee->tasks[worker_id][eee->pidx[worker_id]]);
+    ee_task = &(eee->tasks[eee->pidx]);
     ee_task->eee = executor;
     ee_task->status = UCC_OPERATION_INITIALIZED;
     memcpy(&ee_task->args, task_args, sizeof(ucc_ee_executor_task_args_t));
-    eee->pidx[worker_id] = (eee->pidx[worker_id] + 1) % 8;
-    eee->task_id += 1;
+    eee->pidx += 1;
 
     *task = ee_task;
     return UCC_OK;
