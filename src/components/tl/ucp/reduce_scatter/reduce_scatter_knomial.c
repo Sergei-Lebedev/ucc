@@ -146,7 +146,7 @@ UCC_KN_PHASE_EXTRA:
                 block_count, step_radix, local_seg_index);
             local_data  = PTR_OFFSET(sbuf, local_seg_offset * dt_size);
             reduce_data = task->reduce_scatter_kn.scratch;
-#if 0
+            if (!task->reduce_scatter_kn.eee) {
             if (UCC_OK != (status = ucc_dt_reduce_multi(
                                local_data, rbuf, reduce_data,
                                task->send_posted - p->iteration * (radix - 1),
@@ -156,8 +156,7 @@ UCC_KN_PHASE_EXTRA:
                 task->super.super.status = status;
                 return status;
             }
-#else
-            {
+            } else {
                 ucc_ee_executor_task_args_t exec_args;
                 exec_args.task_type     = UCC_MC_EE_EXECUTOR_TASK_TYPE_REDUCE;
                 exec_args.src1.buffer   = local_data;
@@ -188,11 +187,10 @@ UCC_KN_PHASE_EXTRA:
                 /* } while (status != UCC_OK); */
                 /* task->reduce_scatter_kn.exec_task = NULL; */
             }
-#endif
         }
 
     UCC_KN_PHASE_REDUCE:
-#if 1
+
         if (task->reduce_scatter_kn.exec_task) {
             status = ucc_ee_executor_task_test(task->reduce_scatter_kn.exec_task);
             if (UCC_OK != status) {
@@ -205,7 +203,7 @@ UCC_KN_PHASE_EXTRA:
             }
             task->reduce_scatter_kn.exec_task = NULL;
         }
-#endif
+
         ucc_knomial_pattern_next_iteration(p);
     }
 
@@ -216,7 +214,7 @@ UCC_KN_PHASE_EXTRA:
     if (args->coll_type != UCC_COLL_TYPE_ALLREDUCE) {
         offset = 0;
     }
-#if 0
+    if (!task->reduce_scatter_kn.eee) {
     status = ucc_mc_memcpy(PTR_OFFSET(args->dst.info.buffer, offset),
                            task->reduce_scatter_kn.scratch,
                            local_seg_count * dt_size, mem_type, mem_type);
@@ -224,8 +222,7 @@ UCC_KN_PHASE_EXTRA:
     if (UCC_OK != status) {
         return status;
     }
-#else
-    {
+    } else {
         ucc_ee_executor_task_args_t exec_args;
         exec_args.task_type   = UCC_MC_EE_EXECUTOR_TASK_TYPE_COPY;
         exec_args.src1.buffer = task->reduce_scatter_kn.scratch;
@@ -248,7 +245,7 @@ UCC_KN_PHASE_EXTRA:
         } while (status != UCC_OK);
 
     }
-#endif
+
 UCC_KN_PHASE_PROXY: /* unused label */
 out:
     UCC_TL_UCP_PROFILE_REQUEST_EVENT(coll_task, "ucp_reduce_scatter_kn_done",
@@ -323,8 +320,7 @@ ucc_status_t ucc_tl_ucp_reduce_scatter_knomial_init_r(
     if (coll_args->mask & UCC_BASE_COLL_ARGS_FIELD_EEE) {
         task->reduce_scatter_kn.eee = coll_args->eee;
     } else {
-        /* ucc_assert(0); //TODO add eee allocation */
-        // NEEd to split EEE alloc and start. alloc here, start in post
+        task->reduce_scatter_kn.eee = NULL;
     }
 
     ucc_assert(coll_args->args.src.info.mem_type ==
