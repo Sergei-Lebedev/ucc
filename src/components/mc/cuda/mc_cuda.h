@@ -104,13 +104,12 @@ typedef struct ucc_mc_cuda_stream_request {
 typedef struct ucc_mc_cuda_executor {
     ucc_ee_executor_t             super;
     ucc_mc_cuda_executor_state_t  state;
-    uint8_t                       pidx;
+    int                           pidx;
     ucc_ee_executor_task_t        tasks[32];
     ucc_mc_cuda_executor_state_t *dev_state;
-    uint8_t                      *dev_pidx;
     ucc_ee_executor_task_t       *dev_tasks;
-    int                          *next_worker;
-    uint32_t                     task_id;
+    int                          *dev_pidx;
+    int                          *dev_cidx;
 } ucc_mc_cuda_executor_t;
 
 ucc_status_t ucc_mc_cuda_reduce(const void *src1, const void *src2,

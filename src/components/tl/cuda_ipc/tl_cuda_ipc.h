@@ -18,6 +18,18 @@
 #define UCC_TL_CUDA_IPC_DEFAULT_SCORE 30
 #endif
 
+#ifdef HAVE_PROFILING_TL_CUDA_IPC
+#include "utils/profile/ucc_profile.h"
+#else
+#include "utils/profile/ucc_profile_off.h"
+#endif
+
+#define UCC_TL_CUDA_IPC_PROFILE_FUNC UCC_PROFILE_FUNC
+#define UCC_TL_CUDA_IPC_PROFILE_REQUEST_NEW UCC_PROFILE_REQUEST_NEW
+#define UCC_TL_CUDA_IPC_PROFILE_REQUEST_EVENT UCC_PROFILE_REQUEST_EVENT
+#define UCC_TL_CUDA_IPC_PROFILE_REQUEST_FREE UCC_PROFILE_REQUEST_FREE
+
+
 typedef struct ucc_tl_cuda_ipc_iface {
     ucc_tl_iface_t super;
 } ucc_tl_cuda_ipc_iface_t;

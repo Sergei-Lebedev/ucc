@@ -6,6 +6,7 @@
 
 #include "tl_cuda_ipc.h"
 #include "tl_cuda_ipc_coll.h"
+#include "tl_cuda_ipc_ring.h"
 #include "core/ucc_mc.h"
 #include "core/ucc_ee.h"
 #include "core/ucc_team.h"
@@ -68,6 +69,8 @@ UCC_CLASS_INIT_FUNC(ucc_tl_cuda_ipc_team_t, ucc_base_context_t *tl_context,
         ucc_free(self->shm_ids);
     }
     tl_info(tl_context->lib, "posted tl team: %p", self);
+
+    ucc_tl_cuda_ipc_rings_init();
     return status;
 }
 

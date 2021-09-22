@@ -72,6 +72,7 @@ UCC_CLASS_INIT_FUNC(ucc_tl_cuda_ipc_context_t,
 
     self->ipc_cache = kh_init(tl_cuda_ipc_ep_hash);
     tl_info(self->super.super.lib, "initialized tl context: %p", self);
+
     return UCC_OK;
 }
 

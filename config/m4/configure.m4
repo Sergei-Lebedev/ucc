@@ -7,10 +7,11 @@ AC_DEFUN([ENABLE_MODULE_PROFILING],
 [
     AS_IF([test "x$with_profiling" = xall],
         [
-            prof_modules=":core:mc:tl_ucp"
+            prof_modules=":core:mc:tl_ucp:tl_cuda_ipc"
             AC_DEFINE([HAVE_PROFILING_CORE], [1], [Enable profiling for CORE])
             AC_DEFINE([HAVE_PROFILING_TL_UCP], [1], [Enable profiling for TL UCP])
             AC_DEFINE([HAVE_PROFILING_MC], [1], [Enable profiling for MC])
+            AC_DEFINE([HAVE_PROFILING_TL_CUDA_IPC], [1], [Enable profiling for TL CUDA_IPC])
         ],
         [
             case $1 in
@@ -31,6 +32,13 @@ AC_DEFUN([ENABLE_MODULE_PROFILING],
                 AC_DEFINE([HAVE_PROFILING_TL_UCP], [1], [Enable profiling for TL UCP])
                 ;;
             esac
+            case $1 in
+            *tl_cuda_ipc*)
+                prof_modules="${prof_modules}:tl_cuda_ipc"
+                AC_DEFINE([HAVE_PROFILING_TL_CUDA_IPC], [1], [Enable profiling for TL CUDA_IPC])
+                ;;
+            esac
+
         ])
 ])
 

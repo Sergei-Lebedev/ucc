@@ -9,10 +9,12 @@
 
 #include "tl_cuda_ipc_coll.h"
 
-#define N_DGX_RINGS 4
+#define N_DGX_RINGS 8
 
 extern ucc_rank_t dgx_map[N_DGX_RINGS][8];
 extern ucc_rank_t dgx_imap[N_DGX_RINGS][8];
+
+void ucc_tl_cuda_ipc_rings_init();
 
 static inline size_t ucc_ring_block_offset(size_t total_count,
                                            ucc_rank_t n_blocks,
