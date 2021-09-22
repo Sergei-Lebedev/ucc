@@ -50,6 +50,10 @@ __device__ void executor_reduce_float(const float *s1, const float *s2,
         add_float4(d, s14[i * step + idx], s24[i * step + idx]);
         d4[i * step + idx] = d;
     }
+    if (idx < count % sizeof(float4)) {
+        d[count - idx - 1] = s1[count - idx - 1] + s2[count - idx - 1];
+    }
+
 }
 
 template <typename T>
@@ -100,7 +104,7 @@ __device__ void executor_copy_aligned(T* __restrict__ d, T* __restrict__ s,
 
 __global__ void executor_start(volatile ucc_mc_cuda_executor_t *eee)
 {
-    *eee->next_worker = 0;
+    *eee->dev_cidx  = 0;
     *eee->dev_state = UCC_MC_CUDA_EXECUTOR_STARTED;
 }
 
@@ -112,70 +116,74 @@ __global__ void executor_shutdown_ack(volatile ucc_mc_cuda_executor_t *eee)
 
 __global__ void executor_kernel(volatile ucc_mc_cuda_executor_t *eee)
 {
-    const uint32_t    tid         = blockIdx.x * blockDim.x + threadIdx.x;
-    const uint32_t    worker_id   = blockIdx.x;
-    const uint32_t    num_threads = blockDim.x;
-    const uint32_t    num_workers = gridDim.x;
-//    uint8_t           cidx        = 0;
-    volatile uint8_t *pidx;
-    volatile int     *cidx = eee->next_worker;
-    bool is_master = (tid % num_threads == 0) ? true: false;
+    const uint32_t  tid         = threadIdx.x;
+    const uint32_t  worker_id   = blockIdx.x;
+    const uint32_t  num_workers = gridDim.x;
+    bool            is_master   = (tid == 0) ? true: false;
+    volatile int   *pidx, *cidx;
     volatile ucc_mc_cuda_executor_state_t *state;
-    __shared__ ucc_ee_executor_task_t *task;
+    ucc_ee_executor_task_t *task_ptr;
+    __shared__ ucc_ee_executor_task_t task;
     __shared__ bool worker_done;
-    __shared__ bool aligned;
+    bool aligned;
 
     if (is_master) {
-        state = eee->dev_state;
-        pidx  = eee->dev_pidx;
+        state       = eee->dev_state;
+        pidx        = eee->dev_pidx;
+        cidx        = eee->dev_cidx;
         worker_done = false;
     }
 
     while (1) {
         if (is_master) {
             while ((*cidx % num_workers) != worker_id);
-            if (*cidx == *pidx) {
-                if (*state != UCC_MC_CUDA_EXECUTOR_SHUTDOWN) {
-                    continue;
-                }
-                worker_done = true;
-            } else {
-                task = &eee->dev_tasks[*cidx % 16];
-                aligned = !(align_pow2((intptr_t)task->args.src1.buffer, 16) ||
-                            align_pow2((intptr_t)task->args.dst.buffer, 16));
-            }
+            while ((*cidx == *pidx) &&
+                   (*state != UCC_MC_CUDA_EXECUTOR_SHUTDOWN));
             if (*state == UCC_MC_CUDA_EXECUTOR_SHUTDOWN) {
                 worker_done = true;
+            } else {
+                task_ptr = &eee->dev_tasks[*cidx % 32];
+                task = *task_ptr;//eee->dev_tasks[*cidx % 32];
             }
-            atomicAdd(eee->next_worker, 1);
+            atomicAdd(eee->dev_cidx, 1);
         }
 
+        // if (is_master) {
+        //     printf("start task block %d pidx %d cidx %d aligned %d\n",worker_id, *pidx, *cidx, aligned);
+        // }
         __syncthreads();
         if (worker_done) {
             break;
         }
-        switch (task->args.task_type) {
+        switch (task.args.task_type) {
             case UCC_MC_EE_EXECUTOR_TASK_TYPE_REDUCE:
-                // executor_reduce<float>((float*)task->args.src1.buffer,
-                //                        (float*)task->args.src2.buffer,
-                //                        (float*)task->args.dst.buffer,
-                //                        task->args.dst.count);
-                executor_reduce_float((float*)task->args.src1.buffer,
-                                      (float*)task->args.src2.buffer,
-                                      (float*)task->args.dst.buffer,
-                                      task->args.dst.count);
-
+                aligned = !(align_pow2((intptr_t)task.args.src1.buffer, 16) ||
+                            align_pow2((intptr_t)task.args.src2.buffer, 16) ||
+                            align_pow2((intptr_t)task.args.dst.buffer, 16));
+                if (aligned) {
+                    executor_reduce_float((float*)task.args.src1.buffer,
+                                          (float*)task.args.src2.buffer,
+                                          (float*)task.args.dst.buffer,
+                                          task.args.dst.count);
+                } else {
+                    executor_reduce<float>((float*)task.args.src1.buffer,
+                                           (float*)task.args.src2.buffer,
+                                           (float*)task.args.dst.buffer,
+                                           task.args.dst.count);
+                }
                 break;
             case UCC_MC_EE_EXECUTOR_TASK_TYPE_COPY:
+                aligned = !(align_pow2((intptr_t)task.args.src1.buffer, 16) ||
+                            align_pow2((intptr_t)task.args.dst.buffer, 16));
                 if (aligned) {
-                    executor_copy_aligned<uint4>((uint4*)task->args.dst.buffer,
-                                                 (uint4*)task->args.src1.buffer,
-                                                 task->args.dst.count);
+                    executor_copy_aligned<uint4>((uint4*)task.args.dst.buffer,
+                                                 (uint4*)task.args.src1.buffer,
+                                                 task.args.dst.count);
 
                 } else {
-                    executor_copy((char*)task->args.dst.buffer,
-                                  (char*)task->args.src1.buffer,
-                                   task->args.dst.count);
+                    executor_copy((char*)task.args.dst.buffer,
+                                  (char*)task.args.src1.buffer,
+                                   task.args.dst.count);
                 }
                 break;
         }
@@ -183,8 +191,7 @@ __global__ void executor_kernel(volatile ucc_mc_cuda_executor_t *eee)
         __syncthreads();
         __threadfence_system();
         if (is_master) {
-            //cidx = (cidx + 1) % 8;
-            task->status = UCC_OK;
+            task_ptr->status = UCC_OK;
         }
     }
     return;
@@ -196,11 +203,13 @@ extern "C" {
 
 ucc_status_t ucc_mc_cuda_start_executor(ucc_mc_cuda_executor_t *eee)
 {
-    executor_start<<<1, 1, 0, (cudaStream_t)(eee->super.ee_context)>>>(eee);
-    executor_kernel<<<MC_CUDA_CONFIG->exec_num_workers, 512, 0, (cudaStream_t)(eee->super.ee_context)>>>(eee);
-    executor_shutdown_ack<<<1, 1, 0, (cudaStream_t)(eee->super.ee_context)>>>(eee);
+    cudaStream_t stream = (cudaStream_t)eee->super.ee_context;
 
+    executor_start<<<1, 1, 0, stream>>>(eee);
+    executor_kernel<<<MC_CUDA_CONFIG->exec_num_workers, 1024, 0, stream>>>(eee);
+    executor_shutdown_ack<<<1, 1, 0, stream>>>(eee);
     CUDACHECK(cudaGetLastError());
+
     return UCC_OK;
 }
 

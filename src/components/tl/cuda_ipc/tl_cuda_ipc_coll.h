@@ -75,6 +75,7 @@ ucc_tl_cuda_ipc_task_t *ucc_tl_cuda_ipc_get_task(ucc_tl_cuda_ipc_team_t *team)
     ucc_tl_cuda_ipc_context_t *ctx  = UCC_TL_CUDA_IPC_TEAM_CTX(team);
     ucc_tl_cuda_ipc_task_t    *task = ucc_mpool_get(&ctx->req_mp);;
 
+    UCC_TL_CUDA_IPC_PROFILE_REQUEST_NEW(task, "tl_cuda_ipc_task", 0);
     task->super.super.status = UCC_OPERATION_INITIALIZED;
     task->super.flags        = 0;
     task->super.team         = &team->super.super;
@@ -113,6 +114,7 @@ ucc_tl_cuda_ipc_init_task(ucc_base_coll_args_t *coll_args, ucc_base_team_t *team
 
 static inline void ucc_tl_cuda_ipc_put_task(ucc_tl_cuda_ipc_task_t *task)
 {
+    UCC_TL_CUDA_IPC_PROFILE_REQUEST_FREE(task);
     ucc_mpool_put(task);
 }
 

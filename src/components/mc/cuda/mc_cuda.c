@@ -126,14 +126,14 @@ static void ucc_mc_cuda_ee_executor_init(ucc_mpool_t *mp, void *obj, void *chunk
                   (void**)(&eee->dev_pidx), (void *)&eee->pidx, 0));
     CUDA_FUNC(cudaHostGetDevicePointer(
                   (void**)(&eee->dev_tasks), (void *)eee->tasks, 0));
-    CUDA_FUNC(cudaMalloc((void**)&eee->next_worker, sizeof(*eee->next_worker)));
+    CUDA_FUNC(cudaMalloc((void**)&eee->dev_cidx, sizeof(*eee->dev_cidx)));
 }
 
 static void ucc_mc_cuda_executor_chunk_cleanup(ucc_mpool_t *mp, void *obj)
 {
     ucc_mc_cuda_executor_t *eee = (ucc_mc_cuda_executor_t*) obj;
 
-    CUDA_FUNC(cudaFree((void*)eee->next_worker));
+    CUDA_FUNC(cudaFree((void*)eee->dev_cidx));
 }
 
 static ucc_mpool_ops_t ucc_mc_cuda_ee_executor_mpool_ops = {
@@ -793,7 +793,6 @@ ucc_status_t ucc_cuda_executor_create_post(const ucc_ee_executor_params_t *param
     eee->super.ee_context = (NULL == params->ee_context) ? ucc_mc_cuda.stream : params->ee_context;
     eee->super.ee_type    = params->ee_type;
     eee->state            = UCC_MC_CUDA_EXECUTOR_POSTED;
-    eee->task_id          = 0;
     eee->pidx             = 0;
 
     status = ucc_mc_cuda_start_executor(eee);
@@ -829,7 +828,7 @@ ucc_status_t ucc_cuda_executor_task_post(ucc_ee_executor_task_args_t *task_args,
                                                  ucc_mc_cuda_executor_t);
     ucc_ee_executor_task_t *ee_task;
 
-    ee_task = &(eee->tasks[eee->pidx]);
+    ee_task = &(eee->tasks[eee->pidx % 32]);
     ee_task->eee = executor;
     ee_task->status = UCC_OPERATION_INITIALIZED;
     memcpy(&ee_task->args, task_args, sizeof(ucc_ee_executor_task_args_t));
@@ -849,6 +848,7 @@ ucc_status_t ucc_cuda_executor_destroy(ucc_ee_executor_t *executor)
     ucc_assert((*st != UCC_MC_CUDA_EXECUTOR_POSTED) &&
                (*st != UCC_MC_CUDA_EXECUTOR_SHUTDOWN));
     *st = UCC_MC_CUDA_EXECUTOR_SHUTDOWN;
+    eee->pidx = 64;
     while(*st != UCC_MC_CUDA_EXECUTOR_SHUTDOWN_ACK) { }
     ucc_mpool_put(eee);
     mc_info(&ucc_mc_cuda.super, "CUDA executor destroyed, eee: %p", eee);

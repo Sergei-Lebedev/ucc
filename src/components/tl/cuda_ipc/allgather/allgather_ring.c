@@ -57,6 +57,7 @@ ucc_status_t ucc_tl_cuda_ipc_allgather_progress(ucc_coll_task_t *coll_task)
             if (st == UCC_OK) {
                 // printf("rank %d: step %d exec task done\n",
                 //        (int)trank, task->allgather.step);
+                UCC_TL_CUDA_IPC_PROFILE_REQUEST_EVENT(coll_task, "allgather_task_complete", 0);
                 task->allgather.step++;
                 ucc_tl_cuda_ipc_set_rank_step(team, coll_id, trank,
                                               task->allgather.step,
@@ -101,6 +102,7 @@ ucc_status_t ucc_tl_cuda_ipc_allgather_progress(ucc_coll_task_t *coll_task)
                                              data_size * recv_block +
                                              block_offset);
         exec_args.dst.count    = block_count;
+        UCC_TL_CUDA_IPC_PROFILE_REQUEST_EVENT(coll_task, "cuda_ipc_allgather_task_post", 0);
         st = ucc_ee_executor_task_post(&exec_args,
                                        &task->allgather.exec_task,
                                        schedule->allgather.eee);
@@ -108,7 +110,9 @@ ucc_status_t ucc_tl_cuda_ipc_allgather_progress(ucc_coll_task_t *coll_task)
             task->super.super.status = st;
             return st;
         }
+        return task->super.super.status;
     }
+    UCC_TL_CUDA_IPC_PROFILE_REQUEST_EVENT(coll_task, "cuda_ipc_allgather_finish", 0);
     task->super.super.status = UCC_OK;
     return task->super.super.status;
 }
@@ -131,6 +135,7 @@ ucc_status_t ucc_tl_cuda_ipc_allgather_start(ucc_coll_task_t *coll_task)
     const int         ring_id  = task->allgather.ring_id;
     task->allgather.exec_task = NULL;
 
+    UCC_TL_CUDA_IPC_PROFILE_REQUEST_EVENT(coll_task, "cuda_ipc_allgather_start", 0);
     if (!UCC_IS_INPLACE(coll_task->args)) {
         task->allgather.step      = 0;
         block_count = ucc_ring_block_count(data_size, task->allgather.n_rings,
@@ -144,7 +149,6 @@ ucc_status_t ucc_tl_cuda_ipc_allgather_start(ucc_coll_task_t *coll_task)
         exec_args.dst.buffer  = PTR_OFFSET(coll_task->args.dst.info.buffer,
                                            data_size * trank + block_offset);
         exec_args.dst.count   = block_count;
-
 
         st = ucc_ee_executor_task_post(&exec_args, &task->allgather.exec_task,
                                        schedule->allgather.eee);
