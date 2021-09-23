@@ -14,7 +14,7 @@
 extern ucc_rank_t dgx_map[N_DGX_RINGS][8];
 extern ucc_rank_t dgx_imap[N_DGX_RINGS][8];
 
-void ucc_tl_cuda_ipc_rings_init();
+void ucc_tl_cuda_ipc_rings_init(ucc_rank_t team_size);
 
 static inline size_t ucc_ring_block_offset(size_t total_count,
                                            ucc_rank_t n_blocks,

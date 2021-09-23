@@ -38,8 +38,8 @@ typedef struct ucc_tl_cuda_ipc_task {
             ucc_ee_executor_task_t *exec_task;
         } reduce_scatter;
         struct {
-            void                   *scratch;
-            ucc_mc_buffer_header_t *scratch_mc_header;
+            // void                   *scratch;
+            // ucc_mc_buffer_header_t *scratch_mc_header;
             uint32_t                step;
             uint32_t                coll_id;
             int                     ring_id;
@@ -47,6 +47,11 @@ typedef struct ucc_tl_cuda_ipc_task {
             void                   *peer_map_addr;
             ucc_ee_executor_task_t *exec_task;
         } allgather;
+        struct {
+            void                   **peer_map_addr;
+            uint32_t                coll_id;
+            ucc_ee_executor_task_t *exec_task[MAX_STATIC_SIZE];
+        } allgather_linear;
     };
 } ucc_tl_cuda_ipc_task_t;
 
@@ -60,6 +65,9 @@ typedef struct ucc_tl_cuda_ipc_schedule {
         struct {
             ucc_ee_executor_t *eee;
         } allgather;
+        struct {
+            ucc_ee_executor_t *eee;
+        } allgather_linear;
     };
 } ucc_tl_cuda_ipc_schedule_t;
 
@@ -136,5 +144,9 @@ ucc_status_t ucc_tl_cuda_ipc_reduce_scatter_init(ucc_base_coll_args_t *coll_args
 ucc_status_t ucc_tl_cuda_ipc_allgather_init(ucc_base_coll_args_t *coll_args,
                                             ucc_base_team_t *team,
                                             ucc_coll_task_t **task);
+
+ucc_status_t ucc_tl_cuda_ipc_allgather_linear_init(ucc_base_coll_args_t *coll_args,
+                                                   ucc_base_team_t *tl_team,
+                                                   ucc_coll_task_t **task_p);
 
 #endif
