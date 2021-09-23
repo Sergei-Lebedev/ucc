@@ -70,7 +70,7 @@ UCC_CLASS_INIT_FUNC(ucc_tl_cuda_ipc_team_t, ucc_base_context_t *tl_context,
     }
     tl_info(tl_context->lib, "posted tl team: %p", self);
 
-    ucc_tl_cuda_ipc_rings_init();
+    ucc_tl_cuda_ipc_rings_init(self->size);
     return status;
 }
 
