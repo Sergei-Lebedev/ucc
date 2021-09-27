@@ -4,11 +4,27 @@
  * See file LICENSE for terms.
  */
 
-#ifndef UCC_TL_NCCL_COLL_H_
-#define UCC_TL_NCCL_COLL_H_
+#ifndef UCC_TL_CUDA_IPC_COLL_H_
+#define UCC_TL_CUDA_IPC_COLL_H_
 
 #include "tl_cuda_ipc.h"
 #include "core/ucc_mc.h"
+
+#define UCC_TL_CUDA_IPC_N_DEFAULT_ALG_SELECT_STR 2
+extern const char
+    *ucc_tl_cuda_ipc_default_alg_select_str[UCC_TL_CUDA_IPC_N_DEFAULT_ALG_SELECT_STR];
+
+enum {
+    UCC_TL_CUDA_IPC_REDUCE_SCATTER_ALG_LINEAR,
+    UCC_TL_CUDA_IPC_REDUCE_SCATTER_ALG_RING,
+    UCC_TL_CUDA_IPC_REDUCE_SCATTER_ALG_LAST
+};
+
+enum {
+    UCC_TL_CUDA_IPC_ALLGATHER_ALG_LINEAR,
+    UCC_TL_CUDA_IPC_ALLGATHER_ALG_RING,
+    UCC_TL_CUDA_IPC_ALLGATHER_ALG_LAST
+};
 
 #define MAX_STATIC_SIZE 16
 
@@ -38,6 +54,11 @@ typedef struct ucc_tl_cuda_ipc_task {
             ucc_ee_executor_task_t *exec_task;
         } reduce_scatter;
         struct {
+            void                   **peer_map_addr;
+            uint32_t                coll_id;
+            ucc_ee_executor_task_t *exec_task[MAX_STATIC_SIZE];
+        } reduce_scatter_linear;
+        struct {
             // void                   *scratch;
             // ucc_mc_buffer_header_t *scratch_mc_header;
             uint32_t                step;
@@ -62,6 +83,9 @@ typedef struct ucc_tl_cuda_ipc_schedule {
         struct {
             ucc_ee_executor_t *eee;
         } reduce_scatter;
+        struct {
+            ucc_ee_executor_t *eee;
+        } reduce_scatter_linear;
         struct {
             ucc_ee_executor_t *eee;
         } allgather;
@@ -137,16 +161,25 @@ ucc_status_t ucc_tl_cuda_ipc_alltoallv_init(ucc_base_coll_args_t *coll_args,
                                             ucc_base_team_t *team,
                                             ucc_coll_task_t **task);
 
-ucc_status_t ucc_tl_cuda_ipc_reduce_scatter_init(ucc_base_coll_args_t *coll_args,
+ucc_status_t ucc_tl_cuda_ipc_reduce_scatter_ring_init(ucc_base_coll_args_t *coll_args,
+                                                      ucc_base_team_t *team,
+                                                      ucc_coll_task_t **task);
+
+ucc_status_t ucc_tl_cuda_ipc_reduce_scatter_linear_init(ucc_base_coll_args_t *coll_args,
+                                                        ucc_base_team_t *team,
+                                                        ucc_coll_task_t **task);
+
+ucc_status_t ucc_tl_cuda_ipc_allgather_ring_init(ucc_base_coll_args_t *coll_args,
                                                  ucc_base_team_t *team,
                                                  ucc_coll_task_t **task);
-
-ucc_status_t ucc_tl_cuda_ipc_allgather_init(ucc_base_coll_args_t *coll_args,
-                                            ucc_base_team_t *team,
-                                            ucc_coll_task_t **task);
 
 ucc_status_t ucc_tl_cuda_ipc_allgather_linear_init(ucc_base_coll_args_t *coll_args,
                                                    ucc_base_team_t *tl_team,
                                                    ucc_coll_task_t **task_p);
+
+ucc_status_t ucc_tl_cuda_ipc_alg_id_to_init(int alg_id, const char *alg_id_str,
+                                            ucc_coll_type_t   coll_type,
+                                            ucc_memory_type_t mem_type,
+                                            ucc_base_coll_init_fn_t *init);
 
 #endif

@@ -4,8 +4,8 @@
  * See file LICENSE for terms.
  */
 
-#ifndef UCC_TL_NCCL_H_
-#define UCC_TL_NCCL_H_
+#ifndef UCC_TL_CUDA_IPC_H_
+#define UCC_TL_CUDA_IPC_H_
 
 #include "components/tl/ucc_tl.h"
 #include "components/tl/ucc_tl_log.h"
@@ -99,8 +99,10 @@ typedef struct ucc_tl_cuda_ipc_team {
 #define TASK_LIB(_task)                                                        \
     (ucc_derived_of((_task)->super.team->context->lib, ucc_tl_cuda_ipc_lib_t))
 
-#define UCC_TL_CUDA_IPC_SUPPORTED_COLLS             \
-    (UCC_COLL_TYPE_ALLTOALLV)
+#define UCC_TL_CUDA_IPC_SUPPORTED_COLLS                                        \
+    (UCC_COLL_TYPE_ALLTOALLV |                                                 \
+     UCC_COLL_TYPE_ALLGATHER |                                                 \
+     UCC_COLL_TYPE_REDUCE_SCATTER)
 
 UCC_CLASS_DECLARE(ucc_tl_cuda_ipc_team_t, ucc_base_context_t *,
                   const ucc_base_team_params_t *);

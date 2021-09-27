@@ -17,7 +17,7 @@ static inline uint32_t ucc_tl_cuda_ipc_get_recv_block(ucc_rank_t trank,
     return dgx_map[ring_id][(dgx_imap[ring_id][trank] + tsize - step - 1) % tsize];
 }
 
-ucc_status_t ucc_tl_cuda_ipc_reduce_scatter_finalize(ucc_coll_task_t *coll_task)
+ucc_status_t ucc_tl_cuda_ipc_reduce_scatter_ring_finalize(ucc_coll_task_t *coll_task)
 {
     ucc_tl_cuda_ipc_task_t *task = ucc_derived_of(coll_task,
                                                   ucc_tl_cuda_ipc_task_t);
@@ -26,7 +26,7 @@ ucc_status_t ucc_tl_cuda_ipc_reduce_scatter_finalize(ucc_coll_task_t *coll_task)
     return UCC_OK;
 }
 
-ucc_status_t ucc_tl_cuda_ipc_reduce_scatter_progress(ucc_coll_task_t *coll_task)
+ucc_status_t ucc_tl_cuda_ipc_reduce_scatter_ring_progress(ucc_coll_task_t *coll_task)
 {
     ucc_tl_cuda_ipc_task_t     *task     = ucc_derived_of(coll_task,
                                                           ucc_tl_cuda_ipc_task_t);
@@ -123,7 +123,7 @@ ucc_status_t ucc_tl_cuda_ipc_reduce_scatter_progress(ucc_coll_task_t *coll_task)
     return task->super.super.status;
 }
 
-ucc_status_t ucc_tl_cuda_ipc_reduce_scatter_start(ucc_coll_task_t *coll_task)
+ucc_status_t ucc_tl_cuda_ipc_reduce_scatter_ring_start(ucc_coll_task_t *coll_task)
 {
     ucc_tl_cuda_ipc_task_t *task = ucc_derived_of(coll_task,
                                                   ucc_tl_cuda_ipc_task_t);
@@ -159,7 +159,7 @@ ucc_status_t ucc_tl_cuda_ipc_reduce_scatter_start(ucc_coll_task_t *coll_task)
 
     // printf("rank %d: send to %d: count %d offset %d\n", (int)trank, (int)sendto, (int)block_count, (int)block_offset);
     task->reduce_scatter.step = 0;
-    st = ucc_tl_cuda_ipc_reduce_scatter_progress(coll_task);
+    st = ucc_tl_cuda_ipc_reduce_scatter_ring_progress(coll_task);
     if (UCC_INPROGRESS == task->super.super.status) {
         ucc_progress_enqueue(UCC_TL_CORE_CTX(team)->pq, &task->super);
         return UCC_OK;
@@ -280,9 +280,9 @@ ucc_tl_cuda_ipc_reduce_scatter_ring_sched_finalize(ucc_coll_task_t *task)
 }
 
 
-ucc_status_t ucc_tl_cuda_ipc_reduce_scatter_init(ucc_base_coll_args_t *coll_args,
-                                                 ucc_base_team_t *tl_team,
-                                                 ucc_coll_task_t **task_p)
+ucc_status_t ucc_tl_cuda_ipc_reduce_scatter_ring_init(ucc_base_coll_args_t *coll_args,
+                                                      ucc_base_team_t *tl_team,
+                                                      ucc_coll_task_t **task_p)
 {
     ucc_tl_cuda_ipc_team_t     *team     = ucc_derived_of(tl_team,
                                                           ucc_tl_cuda_ipc_team_t);
@@ -325,9 +325,9 @@ ucc_status_t ucc_tl_cuda_ipc_reduce_scatter_init(ucc_base_coll_args_t *coll_args
             tl_error(UCC_TASK_LIB(task), "failed to allocate scratch buffer");
             return status;
         }
-        task->super.post     = ucc_tl_cuda_ipc_reduce_scatter_start;
-        task->super.progress = ucc_tl_cuda_ipc_reduce_scatter_progress;
-        task->super.finalize = ucc_tl_cuda_ipc_reduce_scatter_finalize;
+        task->super.post     = ucc_tl_cuda_ipc_reduce_scatter_ring_start;
+        task->super.progress = ucc_tl_cuda_ipc_reduce_scatter_ring_progress;
+        task->super.finalize = ucc_tl_cuda_ipc_reduce_scatter_ring_finalize;
         ucc_tl_cuda_ipc_ring_setup(&task->super, task->reduce_scatter.ring_id,
                                    task->reduce_scatter.coll_id,
                                    task->reduce_scatter.scratch,
