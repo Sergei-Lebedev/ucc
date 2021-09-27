@@ -26,6 +26,7 @@ ucc_pt_coll_allreduce::ucc_pt_coll_allreduce(ucc_datatype_t dt,
     coll_args.dst.info.datatype = dt;
     coll_args.src.info.mem_type = mt;
     coll_args.dst.info.mem_type = mt;
+    coll_args.dst.info.datatype = dt;
 }
 
 ucc_status_t ucc_pt_coll_allreduce::init_coll_args(size_t count,
