@@ -114,6 +114,8 @@ ucc_tl_cuda_ipc_reduce_scatter_linear_start(ucc_coll_task_t *coll_task)
                                                 team->rank);
     ucc_rank_t r;
 
+    coll_task->super.status = UCC_INPROGRESS;
+
     for (r = 0; r < team->size; r++) {
         task->reduce_scatter_linear.exec_task[r] = NULL;
     }
