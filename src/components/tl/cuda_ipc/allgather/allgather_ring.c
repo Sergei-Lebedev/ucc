@@ -135,6 +135,7 @@ ucc_status_t ucc_tl_cuda_ipc_allgather_ring_start(ucc_coll_task_t *coll_task)
     const int         ring_id  = task->allgather.ring_id;
     task->allgather.exec_task = NULL;
 
+    coll_task->super.status = UCC_INPROGRESS;
     UCC_TL_CUDA_IPC_PROFILE_REQUEST_EVENT(coll_task, "cuda_ipc_allgather_start", 0);
     if (!UCC_IS_INPLACE(coll_task->args)) {
         task->allgather.step      = 0;

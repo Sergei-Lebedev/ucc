@@ -138,6 +138,8 @@ ucc_status_t ucc_tl_cuda_ipc_reduce_scatter_ring_start(ucc_coll_task_t *coll_tas
     size_t block_count, block_offset, frag_count, frag_offset, block;
     ucc_ee_executor_task_args_t exec_args;
     ucc_status_t st;
+
+    coll_task->super.status = UCC_INPROGRESS;
     block = ucc_tl_cuda_ipc_get_send_block(trank, tsize, 1, task->reduce_scatter.ring_id);
     block_count = ucc_ring_block_count(ccount, tsize, block);
     frag_count = ucc_ring_block_count(block_count, task->reduce_scatter.n_rings, task->reduce_scatter.ring_id);
