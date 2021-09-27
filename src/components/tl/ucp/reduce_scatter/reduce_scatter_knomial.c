@@ -215,13 +215,15 @@ UCC_KN_PHASE_EXTRA:
         offset = 0;
     }
     if (!task->reduce_scatter_kn.eee) {
-    status = ucc_mc_memcpy(PTR_OFFSET(args->dst.info.buffer, offset),
-                           task->reduce_scatter_kn.scratch,
-                           local_seg_count * dt_size, mem_type, mem_type);
+        status = ucc_mc_memcpy(PTR_OFFSET(args->dst.info.buffer, offset),
+                               task->reduce_scatter_kn.scratch,
+                               local_seg_count * dt_size, mem_type, mem_type);
 
-    if (UCC_OK != status) {
-        return status;
-    }
+        if (UCC_OK != status) {
+            return status;
+        }
+    } else if (1) {
+        task->reduce_scatter_kn.eee = NULL;
     } else {
         ucc_ee_executor_task_args_t exec_args;
         exec_args.task_type   = UCC_MC_EE_EXECUTOR_TASK_TYPE_COPY;

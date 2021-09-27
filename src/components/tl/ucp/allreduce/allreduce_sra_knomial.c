@@ -95,12 +95,14 @@ static ucc_status_t ucc_tl_ucp_allreduce_sra_knomial_setup_frag(
     targs->src.info.count = frag_count;
     targs->dst.info.count = frag_count;
 
+    targs->src.info.datatype = targs->dst.info.datatype  = dt;
     targs                  = &frag->tasks[1]->args; //ALLGATHER
     targs->src.info.buffer = NULL;
     targs->dst.info.buffer =
         PTR_OFFSET(args->dst.info.buffer, offset * dt_size);
     targs->src.info.count = 0;
     targs->dst.info.count = frag_count;
+    targs->src.info.datatype = targs->dst.info.datatype  = dt;
 
     return UCC_OK;
 }
