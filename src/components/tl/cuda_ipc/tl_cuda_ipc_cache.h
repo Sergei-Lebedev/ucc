@@ -4,8 +4,8 @@
  * See file LICENSE for terms.
  */
 
-#ifndef UCC_CUDA_IPC_H_
-#define UCC_CUDA_IPC_H_
+#ifndef UCC_CUDA_IPC_CACHE_H_
+#define UCC_CUDA_IPC_CACHE_H_
 
 #include <ucs/datastruct/pgtable.h>
 #include <ucs/datastruct/list.h>

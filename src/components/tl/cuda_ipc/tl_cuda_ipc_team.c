@@ -135,50 +135,60 @@ err:
 }
 
 
-ucc_status_t ucc_tl_cuda_ipc_team_get_scores(ucc_base_team_t   *tl_team,
-                                         ucc_coll_score_t **score_p)
+ucc_status_t ucc_tl_cuda_ipc_team_get_scores(ucc_base_team_t *tl_team,
+                                             ucc_coll_score_t **score_p)
 {
     ucc_tl_cuda_ipc_team_t *team = ucc_derived_of(tl_team,
                                                   ucc_tl_cuda_ipc_team_t);
-    ucc_base_lib_t         *lib  = UCC_TL_TEAM_LIB(team);
-    ucc_coll_score_t       *score;
-    ucc_status_t            status;
+    ucc_base_lib_t *lib  = UCC_TL_TEAM_LIB(team);
+    ucc_coll_score_t *score;
+    ucc_status_t status;
+    unsigned i;
 
-    status = ucc_coll_score_alloc(&score);
+    status = ucc_coll_score_build_default(tl_team, UCC_TL_CUDA_IPC_DEFAULT_SCORE,
+                              NULL, UCC_TL_CUDA_IPC_SUPPORTED_COLLS,
+                              NULL, 0, &score);
     if (UCC_OK != status) {
-        tl_error(lib, "faild to alloc score_t");
-        return status;
-    }
-
-    status = ucc_coll_score_add_range(score, UCC_COLL_TYPE_ALLTOALLV,
-                                      UCC_MEMORY_TYPE_CUDA, 0, UCC_MSG_MAX,
-                                      UCC_TL_CUDA_IPC_DEFAULT_SCORE,
-                                      ucc_tl_cuda_ipc_alltoallv_init, tl_team);
-    if (UCC_OK != status) {
-        tl_error(lib, "faild to add alltoallv range to score_t");
         return status;
     }
 
-    status = ucc_coll_score_add_range(score, UCC_COLL_TYPE_REDUCE_SCATTER,
-                                      UCC_MEMORY_TYPE_CUDA, 0, UCC_MSG_MAX,
-                                      UCC_TL_CUDA_IPC_DEFAULT_SCORE,
-                                      ucc_tl_cuda_ipc_reduce_scatter_init,
-                                      tl_team);
-    if (UCC_OK != status) {
-        tl_error(lib, "faild to add reduce scatter range to score_t");
-        return status;
+
+    for (i = 0; i < UCC_TL_CUDA_IPC_N_DEFAULT_ALG_SELECT_STR; i++) {
+        status = ucc_coll_score_update_from_str(
+            ucc_tl_cuda_ipc_default_alg_select_str[i], score, team->size,
+            NULL, &team->super.super, UCC_TL_CUDA_IPC_DEFAULT_SCORE,
+            ucc_tl_cuda_ipc_alg_id_to_init);
+        if (UCC_OK != status) {
+            tl_error(tl_team->context->lib,
+                     "failed to apply default coll select setting: %s",
+                     ucc_tl_cuda_ipc_default_alg_select_str[i]);
+            goto err;
+        }
     }
-#if 1
-    status = ucc_coll_score_add_range(score, UCC_COLL_TYPE_ALLGATHER,
-                                      UCC_MEMORY_TYPE_CUDA, 0, UCC_MSG_MAX,
-                                      UCC_TL_CUDA_IPC_DEFAULT_SCORE,
-                                      ucc_tl_cuda_ipc_allgather_init,
-                                      tl_team);
-    if (UCC_OK != status) {
-        tl_error(lib, "faild to add allgather range to score_t");
-        return status;
+    // status = ucc_coll_score_add_range(score, UCC_COLL_TYPE_ALLTOALLV,
+    //                                   UCC_MEMORY_TYPE_CUDA, 0, UCC_MSG_MAX,
+    //                                   UCC_TL_CUDA_IPC_DEFAULT_SCORE,
+    //                                   ucc_tl_cuda_ipc_alltoallv_init, tl_team);
+    // if (UCC_OK != status) {
+    //     tl_error(lib, "faild to add alltoallv range to score_t");
+    //     return status;
+    // }
+
+    if (strlen(lib->score_str) > 0) {
+        status = ucc_coll_score_update_from_str(
+            lib->score_str, score, team->size, NULL,
+            &team->super.super, UCC_TL_CUDA_IPC_DEFAULT_SCORE,
+            ucc_tl_cuda_ipc_alg_id_to_init);
+
+        if ((status < 0) && (status != UCC_ERR_INVALID_PARAM) &&
+            (status != UCC_ERR_NOT_SUPPORTED)) {
+            goto err;
+        }
     }
-#endif
+
     *score_p = score;
     return UCC_OK;
+err:
+    ucc_coll_score_free(score);
+    return status;
 }

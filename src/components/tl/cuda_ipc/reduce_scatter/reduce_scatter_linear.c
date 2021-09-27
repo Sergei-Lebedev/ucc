@@ -1,64 +1,95 @@
 #include "../tl_cuda_ipc_coll.h"
 
-ucc_status_t ucc_tl_cuda_ipc_allgather_linear_progress(ucc_coll_task_t *coll_task)
+static inline size_t ucc_reduce_scatter_linear_block_offset(size_t total_count,
+                                                            ucc_rank_t n_blocks,
+                                                            ucc_rank_t block)
+{
+    size_t block_count = total_count / n_blocks;
+    size_t left        = total_count % n_blocks;
+    size_t offset      = block * block_count + left;
+    return (block < left) ? offset - (left - block) : offset;
+}
+
+static inline size_t ucc_reduce_scatter_linear_block_count(size_t total_count,
+                                                           ucc_rank_t n_blocks,
+                                                           ucc_rank_t block)
+{
+    size_t block_count = total_count / n_blocks;
+    size_t left        = total_count % n_blocks;
+    return (block < left) ? block_count + 1 : block_count;
+}
+
+#define NUM_POSTS team->size
+ucc_status_t
+ucc_tl_cuda_ipc_reduce_scatter_linear_progress(ucc_coll_task_t *coll_task)
 {
     ucc_tl_cuda_ipc_schedule_t *schedule = ucc_derived_of(coll_task->schedule,
                                                           ucc_tl_cuda_ipc_schedule_t);
     ucc_tl_cuda_ipc_task_t     *task     = ucc_derived_of(coll_task,
                                                           ucc_tl_cuda_ipc_task_t);
     ucc_tl_cuda_ipc_team_t *team     = TASK_TEAM(task);
-    uint32_t                coll_id  = task->allgather_linear.coll_id;
-    size_t                  ccount    = coll_task->args.dst.info.count / team->size;
+    uint32_t                coll_id   = task->reduce_scatter_linear.coll_id;
+    size_t                  ccount    = coll_task->args.dst.info.count;
     ucc_datatype_t          dt        = coll_task->args.dst.info.datatype;
     size_t                  data_size = ccount * ucc_dt_size(dt);
     ucc_rank_t              num_done = 0;
+    ucc_ee_executor_task_args_t exec_args;
+    size_t block_offset, block_count;
     ucc_rank_t i, peer;
     mem_info_t *peer_info, *my_info;
     ucc_status_t st;
 
-    for (i = 0; i < team->size; i++) {
-        peer = (team->rank + i) % team->size;
-        if ((task->allgather_linear.exec_task[peer] == NULL) &&
-            (GET_MEM_INFO(team, coll_id, peer)->seq_num[1] == task->seq_num)) {
-            ucc_ee_executor_task_args_t exec_args;
-            void                        *src, *dst;
-            peer_info  = GET_MEM_INFO(team, coll_id, peer);
-            if (peer == team->rank) {
-                if (UCC_IS_INPLACE(coll_task->args)) {
-                    continue;
-                }
-                src = coll_task->args.src.info.buffer;
-            } else {
-                src = PTR_OFFSET(task->allgather_linear.peer_map_addr[peer],
-                                 peer_info->offset);
-            }
-            dst = PTR_OFFSET(coll_task->args.dst.info.buffer, peer * data_size);
 
-            exec_args.task_type   = UCC_MC_EE_EXECUTOR_TASK_TYPE_COPY;
-            exec_args.src1.buffer = src;
-            exec_args.src1.count  = data_size;
-            exec_args.dst.buffer  = dst;
-            exec_args.dst.count   = data_size;
+    if (task->reduce_scatter_linear.exec_task[0] == NULL) {
+        for (peer = 0; peer < team->size; peer++) {
+            if (GET_MEM_INFO(team, coll_id, peer)->seq_num[1] != task->seq_num) {
+                task->super.super.status = UCC_INPROGRESS;
+                goto exit;
+            }
+        }
+        for (i = 0 ; i < NUM_POSTS; i++) {
+            block_count = ucc_reduce_scatter_linear_block_count(coll_task->args.dst.info.count,
+                                                                NUM_POSTS, i);
+            block_offset = ucc_reduce_scatter_linear_block_offset(coll_task->args.dst.info.count,
+                                                                NUM_POSTS, i) * ucc_dt_size(dt);
+            exec_args.task_type    = UCC_MC_EE_EXECUTOR_TASK_TYPE_REDUCE_MULTI;
+            exec_args.dst.buffer   = PTR_OFFSET(coll_task->args.dst.info.buffer, block_offset);
+            exec_args.dst.count    = block_count;
+            exec_args.dst.datatype = UCC_DT_FLOAT32;
+            exec_args.src3_size    = team->size;
+            for (peer = 0; peer < team->size; peer++) {
+                void *src;
+                if (peer == team->rank) {
+                    src = PTR_OFFSET(coll_task->args.src.info.buffer, data_size * team->rank);
+                } else {
+                    peer_info = GET_MEM_INFO(team, coll_id, peer);
+                    src = PTR_OFFSET(task->reduce_scatter_linear.peer_map_addr[peer],
+                                    peer_info->offset + data_size * team->rank);
+                }
+                exec_args.src3[peer] = PTR_OFFSET(src, block_offset);
+            }
             st = ucc_ee_executor_task_post(&exec_args,
-                                           &task->allgather_linear.exec_task[peer],
-                                           schedule->allgather_linear.eee);
+                                           &task->reduce_scatter_linear.exec_task[i],
+                                           schedule->reduce_scatter_linear.eee);
             if (ucc_unlikely(st != UCC_OK)) {
                 task->super.super.status = st;
                 goto exit;
             }
         }
-        if ((task->allgather_linear.exec_task[peer] != NULL) &&
-            (ucc_ee_executor_task_test(task->allgather_linear.exec_task[peer]) == UCC_OK)) {
-            num_done++;
+    }
+
+    for (i = 0; i < NUM_POSTS; i++) {
+        st = ucc_ee_executor_task_test(task->reduce_scatter_linear.exec_task[i]);
+        if (st != UCC_OK) {
+            task->super.super.status = UCC_INPROGRESS;
+            goto exit;
         }
     }
 
-    if (num_done == team->size) {
-        my_info = GET_MEM_INFO(team, coll_id, team->rank);
-        __sync_synchronize();
-        asm volatile("": : :"memory");
-        my_info->seq_num[2] = task->seq_num;
-    }
+    my_info = GET_MEM_INFO(team, coll_id, team->rank);
+    __sync_synchronize();
+    asm volatile("": : :"memory");
+    my_info->seq_num[2] = task->seq_num;
 
     num_done = 0;
     for (i = 0; i < team->size; i++) {
@@ -73,23 +104,24 @@ exit:
     return task->super.super.status;
 }
 
-ucc_status_t ucc_tl_cuda_ipc_allgather_linear_start(ucc_coll_task_t *coll_task)
+ucc_status_t
+ucc_tl_cuda_ipc_reduce_scatter_linear_start(ucc_coll_task_t *coll_task)
 {
     ucc_tl_cuda_ipc_task_t *task = ucc_derived_of(coll_task,
                                                   ucc_tl_cuda_ipc_task_t);
     ucc_tl_cuda_ipc_team_t *team = TASK_TEAM(task);
-    mem_info_t             *info = GET_MEM_INFO(team, task->allgather_linear.coll_id,
+    mem_info_t             *info = GET_MEM_INFO(team, task->reduce_scatter_linear.coll_id,
                                                 team->rank);
     ucc_rank_t r;
 
     for (r = 0; r < team->size; r++) {
-        task->allgather_linear.exec_task[r] = NULL;
+        task->reduce_scatter_linear.exec_task[r] = NULL;
     }
     __sync_synchronize();
     asm volatile("": : :"memory");
     info->seq_num[1] = task->seq_num;
 
-    ucc_tl_cuda_ipc_allgather_linear_progress(coll_task);
+    ucc_tl_cuda_ipc_reduce_scatter_linear_progress(coll_task);
     if (UCC_INPROGRESS == task->super.super.status) {
         ucc_progress_enqueue(UCC_TL_CORE_CTX(team)->pq, &task->super);
         return UCC_OK;
@@ -98,7 +130,8 @@ ucc_status_t ucc_tl_cuda_ipc_allgather_linear_start(ucc_coll_task_t *coll_task)
     return ucc_task_complete(coll_task);
 }
 
-ucc_status_t ucc_tl_cuda_ipc_allgather_linear_finalize(ucc_coll_task_t *coll_task)
+ucc_status_t
+ucc_tl_cuda_ipc_reduce_scatter_linear_finalize(ucc_coll_task_t *coll_task)
 {
     ucc_tl_cuda_ipc_task_t *task = ucc_derived_of(coll_task,
                                                   ucc_tl_cuda_ipc_task_t);
@@ -106,13 +139,13 @@ ucc_status_t ucc_tl_cuda_ipc_allgather_linear_finalize(ucc_coll_task_t *coll_tas
     return UCC_OK;
 }
 
-ucc_status_t ucc_tl_cuda_ipc_allgather_linear_setup(ucc_coll_task_t *coll_task)
+ucc_status_t
+ucc_tl_cuda_ipc_reduce_scatter_linear_setup(ucc_coll_task_t *coll_task)
 {
     ucc_tl_cuda_ipc_task_t *task      = ucc_derived_of(coll_task, ucc_tl_cuda_ipc_task_t);
     ucc_tl_cuda_ipc_team_t *team      = TASK_TEAM(task);
-    ucc_rank_t              trank     = team->rank;
-    size_t                  ccount    = coll_task->args.dst.info.count / team->size;
-    ucc_datatype_t          dt        = coll_task->args.dst.info.datatype;
+    size_t                  ccount    = coll_task->args.src.info.count;
+    ucc_datatype_t          dt        = coll_task->args.src.info.datatype;
     size_t                  data_size = ccount * ucc_dt_size(dt);
     void *data_buf, *mapped_addr, *base_address;
     ucc_status_t            status;
@@ -122,12 +155,7 @@ ucc_status_t ucc_tl_cuda_ipc_allgather_linear_setup(ucc_coll_task_t *coll_task)
     uint32_t                max_concurrent;
     ucc_cuda_ipc_cache_t   *cache;
 
-    if (UCC_IS_INPLACE(coll_task->args)) {
-        data_buf = PTR_OFFSET(coll_task->args.dst.info.buffer, data_size * trank);
-    } else {
-        data_buf = coll_task->args.src.info.buffer;
-    }
-
+    data_buf = coll_task->args.src.info.buffer;
     max_concurrent = UCC_TL_CUDA_IPC_TEAM_LIB(team)->cfg.max_concurrent;
     coll_id = (task->seq_num % max_concurrent);
     my_info = GET_MEM_INFO(team, coll_id, team->rank);
@@ -164,15 +192,15 @@ ucc_status_t ucc_tl_cuda_ipc_allgather_linear_setup(ucc_coll_task_t *coll_task)
                 ucc_error("ucc_cuda_ipc_map_memhandle failed");
                 return UCC_ERR_INVALID_PARAM;
             }
-            task->allgather_linear.peer_map_addr[i] = mapped_addr;
+            task->reduce_scatter_linear.peer_map_addr[i] = mapped_addr;
         }
     }
-    task->allgather_linear.coll_id  = coll_id;
+    task->reduce_scatter_linear.coll_id  = coll_id;
     return UCC_OK;
 }
 
 ucc_status_t
-ucc_tl_cuda_ipc_allgather_linear_sched_post(ucc_coll_task_t *coll_task)
+ucc_tl_cuda_ipc_reduce_scatter_linear_sched_post(ucc_coll_task_t *coll_task)
 {
     ucc_tl_cuda_ipc_schedule_t *schedule = ucc_derived_of(coll_task, ucc_tl_cuda_ipc_schedule_t);
     ucc_tl_cuda_ipc_team_t *team = ucc_derived_of(schedule->super.super.team, ucc_tl_cuda_ipc_team_t);
@@ -183,7 +211,7 @@ ucc_tl_cuda_ipc_allgather_linear_sched_post(ucc_coll_task_t *coll_task)
         exec_params.ee_type = UCC_EE_CUDA_STREAM;
         exec_params.ee_context = team->stream;
         st = ucc_ee_executor_create_post(&exec_params,
-                                         &schedule->allgather_linear.eee);
+                                         &schedule->reduce_scatter_linear.eee);
         if (ucc_unlikely(st != UCC_OK)) {
             ucc_error("failed to create ee executor");
             return st;
@@ -191,7 +219,7 @@ ucc_tl_cuda_ipc_allgather_linear_sched_post(ucc_coll_task_t *coll_task)
 
         //TODO: make nonblocking?
         do {
-            st = ucc_ee_executor_create_test(schedule->allgather_linear.eee);
+            st = ucc_ee_executor_create_test(schedule->reduce_scatter_linear.eee);
         } while (st == UCC_INPROGRESS);
 
         if (ucc_unlikely(st != UCC_OK)) {
@@ -203,23 +231,24 @@ ucc_tl_cuda_ipc_allgather_linear_sched_post(ucc_coll_task_t *coll_task)
 }
 
 ucc_status_t
-ucc_tl_cuda_ipc_allgather_linear_sched_finalize(ucc_coll_task_t *task)
+ucc_tl_cuda_ipc_reduce_scatter_linear_sched_finalize(ucc_coll_task_t *task)
 {
     ucc_tl_cuda_ipc_schedule_t *schedule = ucc_derived_of(task, ucc_tl_cuda_ipc_schedule_t);
     ucc_status_t status;
 
 //TODO: move to completed handler
     if (!schedule->eee_external) {
-        ucc_ee_executor_destroy((ucc_ee_executor_t*)schedule->allgather_linear.eee);
+        ucc_ee_executor_destroy((ucc_ee_executor_t*)schedule->reduce_scatter_linear.eee);
     }
     status = ucc_schedule_finalize(task);
     ucc_tl_cuda_ipc_put_schedule(schedule);
     return status;
 }
 
-ucc_status_t ucc_tl_cuda_ipc_allgather_linear_init(ucc_base_coll_args_t *coll_args,
-                                                   ucc_base_team_t *tl_team,
-                                                   ucc_coll_task_t **task_p)
+ucc_status_t
+ucc_tl_cuda_ipc_reduce_scatter_linear_init(ucc_base_coll_args_t *coll_args,
+                                           ucc_base_team_t *tl_team,
+                                           ucc_coll_task_t **task_p)
 {
     ucc_tl_cuda_ipc_team_t     *team     = ucc_derived_of(tl_team,
                                                           ucc_tl_cuda_ipc_team_t);
@@ -227,8 +256,12 @@ ucc_status_t ucc_tl_cuda_ipc_allgather_linear_init(ucc_base_coll_args_t *coll_ar
                                                                         team);
     ucc_tl_cuda_ipc_task_t *task;
 
+    if (UCC_IS_INPLACE(coll_args->args)) {
+        ucc_tl_cuda_ipc_put_schedule(schedule);
+        return UCC_ERR_NOT_SUPPORTED;
+    }
     if (coll_args->mask & UCC_BASE_COLL_ARGS_FIELD_EEE) {
-        schedule->allgather_linear.eee = coll_args->eee;
+        schedule->reduce_scatter_linear.eee = coll_args->eee;
         schedule->eee_external = 1;
     } else {
         schedule->eee_external = 0;
@@ -239,10 +272,11 @@ ucc_status_t ucc_tl_cuda_ipc_allgather_linear_init(ucc_base_coll_args_t *coll_ar
     }
 
     if (team->size <= MAX_STATIC_SIZE) {
-        task->allgather_linear.peer_map_addr = task->data;
+        task->reduce_scatter_linear.peer_map_addr = task->data;
     } else {
-        task->allgather_linear.peer_map_addr = ucc_malloc(sizeof(void*) * team->size);
-        if (!task->allgather_linear.peer_map_addr) {
+        task->reduce_scatter_linear.peer_map_addr = ucc_malloc(sizeof(void*) *
+                                                               team->size);
+        if (!task->reduce_scatter_linear.peer_map_addr) {
             tl_error(UCC_TL_TEAM_LIB(team),
                      "failed to allocate %zd bytes for peer_map_addr",
                      sizeof(void*) * team->size);
@@ -250,17 +284,17 @@ ucc_status_t ucc_tl_cuda_ipc_allgather_linear_init(ucc_base_coll_args_t *coll_ar
             return UCC_ERR_NO_MEMORY;
         }
     }
-    task->super.post     = ucc_tl_cuda_ipc_allgather_linear_start;
-    task->super.progress = ucc_tl_cuda_ipc_allgather_linear_progress;
-    task->super.finalize = ucc_tl_cuda_ipc_allgather_linear_finalize;
+    task->super.post     = ucc_tl_cuda_ipc_reduce_scatter_linear_start;
+    task->super.progress = ucc_tl_cuda_ipc_reduce_scatter_linear_progress;
+    task->super.finalize = ucc_tl_cuda_ipc_reduce_scatter_linear_finalize;
 
-    ucc_tl_cuda_ipc_allgather_linear_setup(&task->super);
+    ucc_tl_cuda_ipc_reduce_scatter_linear_setup(&task->super);
     ucc_schedule_add_task(&schedule->super, &task->super);
     ucc_event_manager_subscribe(&schedule->super.super.em, UCC_EVENT_SCHEDULE_STARTED,
                                 &task->super, ucc_task_start_handler);
 
-    schedule->super.super.post     = ucc_tl_cuda_ipc_allgather_linear_sched_post;
-    schedule->super.super.finalize = ucc_tl_cuda_ipc_allgather_linear_sched_finalize;
+    schedule->super.super.post     = ucc_tl_cuda_ipc_reduce_scatter_linear_sched_post;
+    schedule->super.super.finalize = ucc_tl_cuda_ipc_reduce_scatter_linear_sched_finalize;
 
     *task_p = &schedule->super.super;
     return UCC_OK;

@@ -34,6 +34,30 @@ __device__ inline void add_float4(float4 &x, const float4 &y)
     x.w += y.w;
 }
 
+__device__ void executor_reduce_float_multi(float **s, float *d,
+                                            size_t count, size_t size)
+{
+    float4 **s4 = (float4**)s;
+    float4  *d4 = (float4*)d;
+    const size_t idx  = threadIdx.x;
+    const size_t step = blockDim.x;
+    const int n = count / 4;
+    const int num_iter = n / step + ((idx < n % step) ? 1 : 0);
+
+    for(int i = 0; i < num_iter; i++) {
+        float4 temp;
+        add_float4(temp, s4[0][i * step + idx], s4[1][i * step + idx]);
+        for(int j = 2; j < size; j++) {
+            add_float4(temp, s4[j][i * step + idx]);
+        }
+        d4[i * step + idx] = temp;
+    }
+    // if (idx < count % sizeof(float4)) {
+    //     d[count - idx - 1] = s1[count - idx - 1] + s2[count - idx - 1];
+    // }
+
+}
+
 __device__ void executor_reduce_float(const float *s1, const float *s2,
                                       float *d, size_t count)
 {
@@ -185,6 +209,12 @@ __global__ void executor_kernel(volatile ucc_mc_cuda_executor_t *eee)
                                   (char*)task.args.src1.buffer,
                                    task.args.dst.count);
                 }
+                break;
+            case UCC_MC_EE_EXECUTOR_TASK_TYPE_REDUCE_MULTI:
+                executor_reduce_float_multi((float**)task.args.src3,
+                                            (float*)task.args.dst.buffer,
+                                            task.args.dst.count,
+                                            task.args.src3_size);
                 break;
         }
 

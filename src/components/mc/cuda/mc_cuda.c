@@ -817,6 +817,7 @@ ucc_status_t ucc_cuda_executor_create_test(ucc_ee_executor_t *executor)
 
 ucc_status_t ucc_cuda_executor_task_test(ucc_ee_executor_task_t *task)
 {
+    CUDACHECK(cudaGetLastError());
     return task->status;
 }
 
