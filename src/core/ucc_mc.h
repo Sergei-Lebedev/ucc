@@ -114,11 +114,17 @@ ucc_status_t ucc_mc_ee_task_enqueue(void *ee_context, ucc_ee_type_t ee_type,
 
 ucc_status_t ucc_mc_ee_task_sync(void *ee_task, ucc_ee_type_t ee_type);
 
-ucc_status_t ucc_ee_executor_create_post(const ucc_ee_executor_params_t *params,
-                                         ucc_ee_executor_t **executor);
-ucc_status_t ucc_ee_executor_create_test(ucc_ee_executor_t *executor);
+ucc_status_t ucc_ee_executor_init(const ucc_ee_executor_params_t *params,
+                                  ucc_ee_executor_t **executor);
 
-ucc_status_t ucc_ee_executor_destroy(ucc_ee_executor_t *executor);
+ucc_status_t ucc_ee_executor_status(const ucc_ee_executor_t *executor);
+
+ucc_status_t ucc_ee_executor_start(ucc_ee_executor_t *executor,
+                                   void *ee_context);
+
+ucc_status_t ucc_ee_executor_stop(ucc_ee_executor_t *executor);
+
+ucc_status_t ucc_ee_executor_free(ucc_ee_executor_t *executor);
 
 ucc_status_t ucc_ee_executor_task_post(ucc_ee_executor_task_args_t *task_args,
                                        ucc_ee_executor_task_t **task,

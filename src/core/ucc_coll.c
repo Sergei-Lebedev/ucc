@@ -233,7 +233,10 @@ ucc_triggered_coll_complete(ucc_coll_task_t *parent_task, //NOLINT
                             ucc_coll_task_t *coll_task)
 {
     ucc_trace_req("triggered collective complete, task %p", coll_task);
-    return ucc_ee_executor_destroy((ucc_ee_executor_t*)coll_task->ee_task);
+
+    return UCC_OK;
+// TODO: fix alltoall
+//    return ucc_ee_executor_destroy((ucc_ee_executor_t*)coll_task->ee_task);
 
 //    return ucc_mc_ee_task_end(coll_task->ee_task, coll_task->ee->ee_type);
 }
@@ -304,7 +307,7 @@ static ucc_status_t ucc_wait_for_event_trigger(ucc_coll_task_t *coll_task)
         //         return status;
         //     }
         // }
-        ucc_ee_executor_params_t params;
+//        ucc_ee_executor_params_t params;
 
         if (coll_task->triggered_task->early_triggered_post) {
             coll_task->triggered_task->ee = coll_task->ee;
@@ -312,15 +315,19 @@ static ucc_status_t ucc_wait_for_event_trigger(ucc_coll_task_t *coll_task)
             assert(status == UCC_OK);
         }
 
-        params.ee_type = coll_task->ee->ee_type;
-        params.ee_context = coll_task->ee->ee_context;
-        status = ucc_ee_executor_create_post(&params,
-                                             (ucc_ee_executor_t**)&coll_task->ee_task);
-        if (ucc_unlikely(status != UCC_OK)) {
-            ucc_error("failed to create ee executor");
-            coll_task->super.status = status;
-            return status;
-        }
+//TODO: fix alltoall!!!
+
+        // params.ee_type = coll_task->ee->ee_type;
+        // params.ee_context = coll_task->ee->ee_context;
+        // status = ucc_ee_executor_create_post(&params,
+        //                                      (ucc_ee_executor_t**)&coll_task->ee_task);
+        // if (ucc_unlikely(status != UCC_OK)) {
+        //     ucc_error("failed to create ee executor");
+        //     coll_task->super.status = status;
+        //     return status;
+        // }
+
+
         coll_task->triggered_task->ee_task = coll_task->ee_task;
         // if (ctx->triggered_overlap) {
         //     status = ucc_mc_ee_task_sync(coll_task->ee_task,
@@ -355,10 +362,12 @@ static ucc_status_t ucc_wait_for_event_trigger(ucc_coll_task_t *coll_task)
     //                                     coll_task->ee->ee_type))) {
     //     coll_task->super.status = UCC_OK;
     // }
-    if (coll_task->ee_task == NULL ||
-        (UCC_OK == ucc_ee_executor_create_test(coll_task->ee_task))) {
-        coll_task->super.status = UCC_OK;
-    }
+
+    //TODO: fix alltoall
+    // if (coll_task->ee_task == NULL ||
+    //     (UCC_OK == ucc_ee_executor_create_test(coll_task->ee_task))) {
+    //     coll_task->super.status = UCC_OK;
+    // }
 
     return UCC_OK;
 }

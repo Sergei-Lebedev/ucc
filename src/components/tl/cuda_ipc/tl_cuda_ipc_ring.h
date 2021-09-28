@@ -82,4 +82,8 @@ ucc_status_t ucc_tl_cuda_ipc_ring_setup(ucc_coll_task_t *coll_task,
                                         size_t scratch_size,
                                         void **recv_peer_addr);
 
+ucc_status_t ucc_tl_cuda_ipc_ring_free(ucc_coll_task_t *coll_task,
+                                       int ring_id, uint32_t coll_id,
+                                       void *mapped_addr);
+
 #endif

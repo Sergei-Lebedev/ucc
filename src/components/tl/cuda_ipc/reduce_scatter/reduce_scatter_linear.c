@@ -70,7 +70,7 @@ ucc_tl_cuda_ipc_reduce_scatter_linear_progress(ucc_coll_task_t *coll_task)
             }
             st = ucc_ee_executor_task_post(&exec_args,
                                            &task->reduce_scatter_linear.exec_task[i],
-                                           schedule->reduce_scatter_linear.eee);
+                                           schedule->eee);
             if (ucc_unlikely(st != UCC_OK)) {
                 task->super.super.status = st;
                 goto exit;
@@ -137,6 +137,11 @@ ucc_tl_cuda_ipc_reduce_scatter_linear_finalize(ucc_coll_task_t *coll_task)
 {
     ucc_tl_cuda_ipc_task_t *task = ucc_derived_of(coll_task,
                                                   ucc_tl_cuda_ipc_task_t);
+    ucc_tl_cuda_ipc_team_t *team = TASK_TEAM(task);
+
+    if (team->size > MAX_STATIC_SIZE) {
+        ucc_free(task->reduce_scatter_linear.peer_map_addr);
+    }
     ucc_tl_cuda_ipc_put_task(task);
     return UCC_OK;
 }
@@ -206,30 +211,34 @@ ucc_tl_cuda_ipc_reduce_scatter_linear_sched_post(ucc_coll_task_t *coll_task)
 {
     ucc_tl_cuda_ipc_schedule_t *schedule = ucc_derived_of(coll_task, ucc_tl_cuda_ipc_schedule_t);
     ucc_tl_cuda_ipc_team_t *team = ucc_derived_of(schedule->super.super.team, ucc_tl_cuda_ipc_team_t);
-    ucc_ee_executor_params_t exec_params;
     ucc_status_t st;
 
     if (!schedule->eee_external) {
-        exec_params.ee_type = UCC_EE_CUDA_STREAM;
-        exec_params.ee_context = team->stream;
-        st = ucc_ee_executor_create_post(&exec_params,
-                                         &schedule->reduce_scatter_linear.eee);
+        st = ucc_ee_executor_start(schedule->eee,
+                                   (void*)team->stream);
         if (ucc_unlikely(st != UCC_OK)) {
-            ucc_error("failed to create ee executor");
+            ucc_error("failed to start ee executor");
             return st;
         }
 
-        //TODO: make nonblocking?
         do {
-            st = ucc_ee_executor_create_test(schedule->reduce_scatter_linear.eee);
+            st = ucc_ee_executor_status(schedule->eee);
         } while (st == UCC_INPROGRESS);
-
         if (ucc_unlikely(st != UCC_OK)) {
-            ucc_error("failed to create ee executor");
+            ucc_error("failed to start ee executor");
             return st;
         }
     }
     return ucc_schedule_start(&schedule->super);
+}
+
+void ucc_tl_cuda_ipc_reduce_scatter_linear_sched_done(void *data, ucc_status_t status)
+{
+    ucc_tl_cuda_ipc_schedule_t *schedule = (ucc_tl_cuda_ipc_schedule_t*)data;
+
+    if (!schedule->eee_external) {
+        ucc_ee_executor_stop(schedule->eee);
+    }
 }
 
 ucc_status_t
@@ -240,7 +249,7 @@ ucc_tl_cuda_ipc_reduce_scatter_linear_sched_finalize(ucc_coll_task_t *task)
 
 //TODO: move to completed handler
     if (!schedule->eee_external) {
-        ucc_ee_executor_destroy((ucc_ee_executor_t*)schedule->reduce_scatter_linear.eee);
+        ucc_ee_executor_free(schedule->eee);
     }
     status = ucc_schedule_finalize(task);
     ucc_tl_cuda_ipc_put_schedule(schedule);
@@ -257,16 +266,29 @@ ucc_tl_cuda_ipc_reduce_scatter_linear_init(ucc_base_coll_args_t *coll_args,
     ucc_tl_cuda_ipc_schedule_t *schedule = ucc_tl_cuda_ipc_get_schedule(&coll_args->args,
                                                                         team);
     ucc_tl_cuda_ipc_task_t *task;
+    ucc_ee_executor_params_t exec_params;
+    ucc_status_t status;
 
     if (UCC_IS_INPLACE(coll_args->args)) {
         ucc_tl_cuda_ipc_put_schedule(schedule);
         return UCC_ERR_NOT_SUPPORTED;
     }
     if (coll_args->mask & UCC_BASE_COLL_ARGS_FIELD_EEE) {
-        schedule->reduce_scatter_linear.eee = coll_args->eee;
         schedule->eee_external = 1;
+        schedule->eee = coll_args->eee;
     } else {
         schedule->eee_external = 0;
+        exec_params.ee_type = UCC_EE_CUDA_STREAM;
+        status = ucc_ee_executor_init(&exec_params,
+                                      &schedule->eee);
+        if (ucc_unlikely(status != UCC_OK)) {
+            tl_error(UCC_TL_TEAM_LIB(team), "failed to init ee executor");
+            goto free_schedule;
+            return status;
+        }
+        schedule->super.super.flags |=  UCC_COLL_TASK_FLAG_CB2;
+        schedule->super.super.cb2.cb = ucc_tl_cuda_ipc_reduce_scatter_linear_sched_done;
+        schedule->super.super.cb2.data = (void*)schedule;
     }
     task = ucc_tl_cuda_ipc_init_task(coll_args, tl_team);
     if (!task) {
@@ -300,4 +322,8 @@ ucc_tl_cuda_ipc_reduce_scatter_linear_init(ucc_base_coll_args_t *coll_args,
 
     *task_p = &schedule->super.super;
     return UCC_OK;
+
+free_schedule:
+    ucc_tl_cuda_ipc_put_schedule(schedule);
+    return status;
 }

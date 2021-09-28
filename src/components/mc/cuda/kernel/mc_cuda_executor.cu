@@ -173,7 +173,7 @@ __global__ void executor_kernel(volatile ucc_mc_cuda_executor_t *eee)
         }
 
         // if (is_master) {
-        //     printf("start task block %d pidx %d cidx %d aligned %d\n",worker_id, *pidx, *cidx, aligned);
+        //     printf("start task block %d pidx %d cidx %d task %p\n",worker_id, *pidx, *cidx, task_ptr);
         // }
         __syncthreads();
         if (worker_done) {
@@ -221,6 +221,7 @@ __global__ void executor_kernel(volatile ucc_mc_cuda_executor_t *eee)
         __syncthreads();
         __threadfence_system();
         if (is_master) {
+            // printf("finish task block %d task %p\n",worker_id, task_ptr);
             task_ptr->status = UCC_OK;
         }
     }
