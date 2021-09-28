@@ -148,6 +148,7 @@ ucc_cuda_ipc_map_memhandle(const void *d_ptr, size_t size, cudaIpcMemHandle_t me
     ucs_status_t ucs_status;
     ucs_pgt_region_t *pgt_region;
     ucc_cuda_ipc_cache_region_t *region;
+    cudaError_t cuerr;
     int ret;
 
 
@@ -187,7 +188,28 @@ ucc_cuda_ipc_map_memhandle(const void *d_ptr, size_t size, cudaIpcMemHandle_t me
         }
     }
 
-    CUDACHECK(cudaIpcOpenMemHandle(mapped_addr, mem_handle, cudaIpcMemLazyEnablePeerAccess));
+    cuerr = cudaIpcOpenMemHandle(mapped_addr, mem_handle, cudaIpcMemLazyEnablePeerAccess);
+    if (cuerr != cudaSuccess) {
+        if (cuerr == cudaErrorAlreadyMapped) {
+            ucc_cuda_ipc_cache_invalidate_regions(cache,
+                    (void *)ucs_align_down_pow2((uintptr_t)d_ptr, UCS_PGT_ADDR_ALIGN),
+                    (void *)ucs_align_up_pow2((uintptr_t)d_ptr + size, UCS_PGT_ADDR_ALIGN));
+
+            cuerr = cudaIpcOpenMemHandle(mapped_addr, mem_handle, cudaIpcMemLazyEnablePeerAccess);
+            if (cuerr != cudaSuccess) {
+                if (cuerr == cudaErrorAlreadyMapped) {
+                    ucc_cuda_ipc_cache_purge(cache);
+                    cuerr = cudaIpcOpenMemHandle(mapped_addr, mem_handle, cudaIpcMemLazyEnablePeerAccess);
+                    if (cuerr != cudaSuccess) {
+                        ucc_error("cudaIpcOpenMemHandle error:%d(%s) ..", cuerr, cudaGetErrorString(cuerr));
+                        status = UCC_ERR_INVALID_PARAM;
+                        goto err;
+                    }
+                }
+            }
+            cudaGetLastError();
+        }
+    }
 
     /*create new cache entry */
     ret = posix_memalign((void **)&region,
