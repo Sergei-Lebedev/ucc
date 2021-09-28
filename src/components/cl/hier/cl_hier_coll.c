@@ -257,6 +257,10 @@ static ucc_status_t ucc_cl_hier_ar_hybrid_schedule_finalize(ucc_coll_task_t *tas
     /*     ucc_mc_ee_put(schedule->ee[i],(mt == UCC_MEMORY_TYPE_CUDA) ? */
     /*                   UCC_EE_CUDA_STREAM : UCC_EE_CPU_THREAD); */
     /* } */
+    if (schedule->eee) {
+        ucc_ee_executor_free(schedule->eee);
+    }
+
     status = ucc_schedule_pipelined_finalize(&schedule->super.super.super);
     /* if (schedule->eee) { */
     /*     ucc_ee_executor_destroy(schedule->eee); */
@@ -381,7 +385,7 @@ ucc_status_t ucc_cl_hier_allreduce_hybrid_frag_init(ucc_base_coll_args_t *coll_a
     args.args.dst.info.datatype = coll_args->args.src.info.datatype;
     args.args.dst.info.count = coll_args->args.src.info.count;
 
-    // used to be UCC_HIER_SBGP_NODE2 - for parallelism with NCCL 
+    // used to be UCC_HIER_SBGP_NODE2 - for parallelism with NCCL
     status = ucc_coll_score_map_lookup(cl_team->sbgps[UCC_HIER_SBGP_NODE].score_map,
                                        &args, &init, &bteam);
     ucc_assert(UCC_OK == status);
@@ -434,6 +438,10 @@ static ucc_status_t ucc_cl_hier_hybrid_allreduce_post(ucc_coll_task_t *task)
 {
     ucc_schedule_pipelined_t *schedule = ucc_derived_of(task,
                                                         ucc_schedule_pipelined_t);
+    ucc_cl_hier_ar_hybrid_schedule_t *ar_schedule = ucc_derived_of(task,
+                                                                   ucc_cl_hier_ar_hybrid_schedule_t);
+    ucc_status_t st;
+
     cl_info(task->team->context->lib,
             "posting hybrid ar, sbuf %p, rbuf %p, count %zd, dt %s, op %s, "
              "inplace %d, pdepth %d, frags_total %d",
@@ -443,6 +451,20 @@ static ucc_status_t ucc_cl_hier_hybrid_allreduce_post(ucc_coll_task_t *task)
              ucc_reduction_op_str(task->args.reduce.predefined_op),
              UCC_IS_INPLACE(task->args), schedule->n_frags,
              schedule->super.n_tasks);
+
+    st = ucc_ee_executor_start(ar_schedule->eee, NULL);
+    if (ucc_unlikely(st != UCC_OK)) {
+        cl_error(task->team->context->lib, "failed to start ee executor");
+        return st;
+    }
+    do {
+        st = ucc_ee_executor_status(ar_schedule->eee);
+    } while (st == UCC_INPROGRESS);
+    if (ucc_unlikely(st != UCC_OK)) {
+        ucc_error("failed to start ee executor");
+        return st;
+    }
+
     return ucc_schedule_pipelined_post(task);
 }
 
@@ -450,7 +472,7 @@ void ucc_cl_hier_allreduce_schedule_done(void *data, ucc_status_t status)
 {
     ucc_cl_hier_ar_hybrid_schedule_t *schedule = data;
     if (schedule->eee) {
-        ucc_ee_executor_destroy(schedule->eee);
+        ucc_ee_executor_stop(schedule->eee);
     }
 }
 
@@ -478,23 +500,31 @@ ucc_status_t ucc_cl_hier_allreduce_init(ucc_base_coll_args_t *coll_args,
     ucc_ee_executor_params_t exec_params;
     ucc_ee_executor_t *eee;
     ucc_status_t status;
+
     exec_params.ee_type = UCC_EE_CUDA_STREAM;
-    exec_params.ee_context = NULL;
-    status = ucc_ee_executor_create_post(&exec_params, &eee);
+    status = ucc_ee_executor_init(&exec_params, &eee);
     if (ucc_unlikely(status != UCC_OK)) {
-        cl_error(team->context->lib, "failed to create ee executor");
+        cl_error(team->context->lib, "failed to init ee executor");
         return status;
     }
 
-    //TODO: make nonblocking?
-    do {
-        status = ucc_ee_executor_create_test(eee);
-    } while (status == UCC_INPROGRESS);
+    // exec_params.ee_type = UCC_EE_CUDA_STREAM;
+    // exec_params.ee_context = NULL;
+    // status = ucc_ee_executor_create_post(&exec_params, &eee);
+    // if (ucc_unlikely(status != UCC_OK)) {
+    //     cl_error(team->context->lib, "failed to create ee executor");
+    //     return status;
+    // }
 
-    if (ucc_unlikely(status != UCC_OK)) {
-        cl_error(team->context->lib, "failed to create ee executor");
-        return status;
-    }
+    // //TODO: make nonblocking?
+    // do {
+    //     status = ucc_ee_executor_create_test(eee);
+    // } while (status == UCC_INPROGRESS);
+
+    // if (ucc_unlikely(status != UCC_OK)) {
+    //     cl_error(team->context->lib, "failed to create ee executor");
+    //     return status;
+    // }
 
     schedule->eee = eee;
     coll_args->mask |= UCC_BASE_COLL_ARGS_FIELD_EEE;

@@ -276,21 +276,31 @@ ucc_status_t ucc_mc_ee_task_sync(void *ee_task, ucc_ee_type_t ee_type)
     return ee_ops[ee_type]->ee_task_sync(ee_task);
 }
 
-ucc_status_t ucc_ee_executor_create_post(const ucc_ee_executor_params_t *params,
-                                         ucc_ee_executor_t **executor)
+ucc_status_t ucc_ee_executor_init(const ucc_ee_executor_params_t *params,
+                                  ucc_ee_executor_t **executor)
 {
-    return executor_ops[params->ee_type]->executor_create_post(params,
-                                                               executor);
+    return executor_ops[params->ee_type]->executor_init(params, executor);
 }
 
-ucc_status_t ucc_ee_executor_create_test(ucc_ee_executor_t *executor)
+ucc_status_t ucc_ee_executor_status(const ucc_ee_executor_t *executor)
 {
-    return executor_ops[executor->ee_type]->executor_create_test(executor);
+    return executor_ops[executor->ee_type]->executor_status(executor);
 }
 
-ucc_status_t ucc_ee_executor_destroy(ucc_ee_executor_t *executor)
+ucc_status_t ucc_ee_executor_start(ucc_ee_executor_t *executor,
+                                   void *ee_context)
 {
-    return executor_ops[executor->ee_type]->executor_destroy(executor);
+    return executor_ops[executor->ee_type]->executor_start(executor, ee_context);
+}
+
+ucc_status_t ucc_ee_executor_stop(ucc_ee_executor_t *executor)
+{
+    return executor_ops[executor->ee_type]->executor_stop(executor);
+}
+
+ucc_status_t ucc_ee_executor_free(ucc_ee_executor_t *executor)
+{
+    return executor_ops[executor->ee_type]->executor_free(executor);
 }
 
 ucc_status_t ucc_ee_executor_task_post(ucc_ee_executor_task_args_t *task_args,

@@ -59,8 +59,6 @@ typedef struct ucc_tl_cuda_ipc_task {
             ucc_ee_executor_task_t *exec_task[MAX_STATIC_SIZE];
         } reduce_scatter_linear;
         struct {
-            // void                   *scratch;
-            // ucc_mc_buffer_header_t *scratch_mc_header;
             uint32_t                step;
             uint32_t                coll_id;
             int                     ring_id;
@@ -77,22 +75,9 @@ typedef struct ucc_tl_cuda_ipc_task {
 } ucc_tl_cuda_ipc_task_t;
 
 typedef struct ucc_tl_cuda_ipc_schedule {
-    ucc_schedule_t super;
-    int            eee_external;
-    union {
-        struct {
-            ucc_ee_executor_t *eee;
-        } reduce_scatter;
-        struct {
-            ucc_ee_executor_t *eee;
-        } reduce_scatter_linear;
-        struct {
-            ucc_ee_executor_t *eee;
-        } allgather;
-        struct {
-            ucc_ee_executor_t *eee;
-        } allgather_linear;
-    };
+    ucc_schedule_t     super;
+    int                eee_external;
+    ucc_ee_executor_t *eee;
 } ucc_tl_cuda_ipc_schedule_t;
 
 static inline void ucc_tl_cuda_ipc_task_reset(ucc_tl_cuda_ipc_task_t *task)

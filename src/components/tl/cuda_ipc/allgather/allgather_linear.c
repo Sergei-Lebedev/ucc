@@ -12,11 +12,16 @@ ucc_status_t ucc_tl_cuda_ipc_allgather_linear_progress(ucc_coll_task_t *coll_tas
     ucc_datatype_t          dt        = coll_task->args.dst.info.datatype;
     size_t                  data_size = ccount * ucc_dt_size(dt);
     ucc_rank_t              num_done = 0;
+    ucc_rank_t              start = 0;
     ucc_rank_t i, peer;
     mem_info_t *peer_info, *my_info;
     ucc_status_t st;
 
-    for (i = 0; i < team->size; i++) {
+    if (UCC_IS_INPLACE(coll_task->args)) {
+        start = 1;
+        num_done = 1;
+    }
+    for (i = start; i < team->size; i++) {
         peer = (team->rank + i) % team->size;
         if ((task->allgather_linear.exec_task[peer] == NULL) &&
             (GET_MEM_INFO(team, coll_id, peer)->seq_num[1] == task->seq_num)) {
@@ -24,9 +29,6 @@ ucc_status_t ucc_tl_cuda_ipc_allgather_linear_progress(ucc_coll_task_t *coll_tas
             void                        *src, *dst;
             peer_info  = GET_MEM_INFO(team, coll_id, peer);
             if (peer == team->rank) {
-                if (UCC_IS_INPLACE(coll_task->args)) {
-                    continue;
-                }
                 src = coll_task->args.src.info.buffer;
             } else {
                 src = PTR_OFFSET(task->allgather_linear.peer_map_addr[peer],
@@ -41,7 +43,7 @@ ucc_status_t ucc_tl_cuda_ipc_allgather_linear_progress(ucc_coll_task_t *coll_tas
             exec_args.dst.count   = data_size;
             st = ucc_ee_executor_task_post(&exec_args,
                                            &task->allgather_linear.exec_task[peer],
-                                           schedule->allgather_linear.eee);
+                                           schedule->eee);
             if (ucc_unlikely(st != UCC_OK)) {
                 task->super.super.status = st;
                 goto exit;
@@ -104,6 +106,12 @@ ucc_status_t ucc_tl_cuda_ipc_allgather_linear_finalize(ucc_coll_task_t *coll_tas
 {
     ucc_tl_cuda_ipc_task_t *task = ucc_derived_of(coll_task,
                                                   ucc_tl_cuda_ipc_task_t);
+    ucc_tl_cuda_ipc_team_t *team = TASK_TEAM(task);
+
+    if (team->size > MAX_STATIC_SIZE) {
+        ucc_free(task->reduce_scatter_linear.peer_map_addr);
+    }
+
     ucc_tl_cuda_ipc_put_task(task);
     return UCC_OK;
 }
@@ -178,30 +186,33 @@ ucc_tl_cuda_ipc_allgather_linear_sched_post(ucc_coll_task_t *coll_task)
 {
     ucc_tl_cuda_ipc_schedule_t *schedule = ucc_derived_of(coll_task, ucc_tl_cuda_ipc_schedule_t);
     ucc_tl_cuda_ipc_team_t *team = ucc_derived_of(schedule->super.super.team, ucc_tl_cuda_ipc_team_t);
-    ucc_ee_executor_params_t exec_params;
     ucc_status_t st;
 
     if (!schedule->eee_external) {
-        exec_params.ee_type = UCC_EE_CUDA_STREAM;
-        exec_params.ee_context = team->stream;
-        st = ucc_ee_executor_create_post(&exec_params,
-                                         &schedule->allgather_linear.eee);
+        st = ucc_ee_executor_start(schedule->eee, (void*)team->stream);
         if (ucc_unlikely(st != UCC_OK)) {
-            ucc_error("failed to create ee executor");
+            ucc_error("failed to start ee executor");
             return st;
         }
 
-        //TODO: make nonblocking?
         do {
-            st = ucc_ee_executor_create_test(schedule->allgather_linear.eee);
+            st = ucc_ee_executor_status(schedule->eee);
         } while (st == UCC_INPROGRESS);
-
         if (ucc_unlikely(st != UCC_OK)) {
-            ucc_error("failed to create ee executor");
+            ucc_error("failed to start ee executor");
             return st;
         }
     }
     return ucc_schedule_start(&schedule->super);
+}
+
+void ucc_tl_cuda_ipc_allgather_linear_sched_done(void *data, ucc_status_t status)
+{
+    ucc_tl_cuda_ipc_schedule_t *schedule = (ucc_tl_cuda_ipc_schedule_t*)data;
+
+    if (!schedule->eee_external) {
+        ucc_ee_executor_stop(schedule->eee);
+    }
 }
 
 ucc_status_t
@@ -212,7 +223,7 @@ ucc_tl_cuda_ipc_allgather_linear_sched_finalize(ucc_coll_task_t *task)
 
 //TODO: move to completed handler
     if (!schedule->eee_external) {
-        ucc_ee_executor_destroy((ucc_ee_executor_t*)schedule->allgather_linear.eee);
+        ucc_ee_executor_free(schedule->eee);
     }
     status = ucc_schedule_finalize(task);
     ucc_tl_cuda_ipc_put_schedule(schedule);
@@ -228,16 +239,30 @@ ucc_status_t ucc_tl_cuda_ipc_allgather_linear_init(ucc_base_coll_args_t *coll_ar
     ucc_tl_cuda_ipc_schedule_t *schedule = ucc_tl_cuda_ipc_get_schedule(&coll_args->args,
                                                                         team);
     ucc_tl_cuda_ipc_task_t *task;
+    ucc_ee_executor_params_t exec_params;
+    ucc_status_t status;
 
     if (coll_args->mask & UCC_BASE_COLL_ARGS_FIELD_EEE) {
-        schedule->allgather_linear.eee = coll_args->eee;
         schedule->eee_external = 1;
+        schedule->eee = coll_args->eee;
     } else {
         schedule->eee_external = 0;
+        exec_params.ee_type = UCC_EE_CUDA_STREAM;
+        status = ucc_ee_executor_init(&exec_params,
+                                      &schedule->eee);
+        if (ucc_unlikely(status != UCC_OK)) {
+            tl_error(UCC_TL_TEAM_LIB(team), "failed to init ee executor");
+            goto free_schedule;
+            return status;
+        }
+        schedule->super.super.flags |=  UCC_COLL_TASK_FLAG_CB2;
+        schedule->super.super.cb2.cb = ucc_tl_cuda_ipc_allgather_linear_sched_done;
+        schedule->super.super.cb2.data = (void*)schedule;
     }
     task = ucc_tl_cuda_ipc_init_task(coll_args, tl_team);
-    if (!task) {
-        return UCC_ERR_NO_MEMORY;
+    if (ucc_unlikely(!task)) {
+        status = UCC_ERR_NO_MEMORY;
+        goto free_executor;
     }
 
     if (team->size <= MAX_STATIC_SIZE) {
@@ -266,4 +291,12 @@ ucc_status_t ucc_tl_cuda_ipc_allgather_linear_init(ucc_base_coll_args_t *coll_ar
 
     *task_p = &schedule->super.super;
     return UCC_OK;
+
+free_executor:
+    if (!schedule->eee_external) {
+        ucc_ee_executor_free(schedule->eee);
+    }
+free_schedule:
+    ucc_tl_cuda_ipc_put_schedule(schedule);
+    return status;
 }

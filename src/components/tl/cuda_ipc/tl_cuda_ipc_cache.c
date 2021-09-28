@@ -112,6 +112,7 @@ void ucc_cuda_ipc_destroy_cache(ucc_cuda_ipc_cache_t *cache)
     free(cache);
 }
 
+#if ENABLE_CACHE
 static void ucc_cuda_ipc_cache_invalidate_regions(ucc_cuda_ipc_cache_t *cache,
                                                   void *from, void *to)
 {
@@ -136,6 +137,7 @@ static void ucc_cuda_ipc_cache_invalidate_regions(ucc_cuda_ipc_cache_t *cache,
     ucs_trace("%s: closed memhandles in the range [%p..%p]",
               cache->name, from, to);
 }
+#endif
 
 ucc_status_t
 ucc_cuda_ipc_map_memhandle(const void *d_ptr, size_t size, cudaIpcMemHandle_t mem_handle,
@@ -156,7 +158,7 @@ ucc_cuda_ipc_map_memhandle(const void *d_ptr, size_t size, cudaIpcMemHandle_t me
         if (memcmp((const void *)&mem_handle, (const void *)&region->mem_handle,
                    sizeof(cudaIpcMemHandle_t)) == 0) {
             /*cache hit */
-            ucs_debug("%s: cuda_ipc cache hit addr:%p size:%lu region:"
+            ucc_debug("%s: cuda_ipc cache hit addr:%p size:%lu region:"
                       UCS_PGT_REGION_FMT, cache->name, d_ptr,
                       size, UCS_PGT_REGION_ARG(&region->super));
 
@@ -166,14 +168,14 @@ ucc_cuda_ipc_map_memhandle(const void *d_ptr, size_t size, cudaIpcMemHandle_t me
             pthread_rwlock_unlock(&cache->lock);
             return UCC_OK;
         } else {
-            ucs_debug("%s: cuda_ipc cache remove stale region:"
+            ucc_debug("%s: cuda_ipc cache remove stale region:"
                       UCS_PGT_REGION_FMT " new_addr:%p new_size:%lu",
                       cache->name, UCS_PGT_REGION_ARG(&region->super),
                       d_ptr, size);
 
             ucs_status = ucs_pgtable_remove(&cache->pgtable, &region->super);
             if (ucs_status != UCS_OK) {
-                ucs_error("%s: failed to remove address:%p from cache",
+                ucc_error("%s: failed to remove address:%p from cache",
                           cache->name, d_ptr);
                 status = ucs_status_to_ucc_status(ucs_status);
                 goto err;
@@ -226,7 +228,7 @@ ucc_cuda_ipc_map_memhandle(const void *d_ptr, size_t size, cudaIpcMemHandle_t me
         goto err;
     }
 
-    ucs_trace("%s: cuda_ipc cache new region:"UCS_PGT_REGION_FMT" size:%lu",
+    ucc_debug("%s: cuda_ipc cache new region:"UCS_PGT_REGION_FMT" size:%lu",
               cache->name, UCS_PGT_REGION_ARG(&region->super), size);
 
     status = UCC_OK;

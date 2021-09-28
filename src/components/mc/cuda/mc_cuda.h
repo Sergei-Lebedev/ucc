@@ -33,6 +33,7 @@ typedef enum ucc_mc_task_status {
 } ucc_mc_task_status_t;
 
 typedef enum ucc_mc_cuda_executor_state {
+    UCC_MC_CUDA_EXECUTOR_INITIALIZED,
     UCC_MC_CUDA_EXECUTOR_POSTED,
     UCC_MC_CUDA_EXECUTOR_STARTED,
     UCC_MC_CUDA_EXECUTOR_SHUTDOWN,

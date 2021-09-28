@@ -140,7 +140,6 @@ typedef enum ucc_ee_executor_task_type {
 typedef struct ucc_ee_executor_params {
     uint64_t        mask;
     ucc_ee_type_t   ee_type;
-    void           *ee_context;
     uint64_t        task_types;
 } ucc_ee_executor_params_t;
 
@@ -179,14 +178,17 @@ typedef struct ucc_ee_executor_task {
 } ucc_ee_executor_task_t;
 
 typedef struct ucc_ee_executor_ops {
-    ucc_status_t (*executor_create_post)(const ucc_ee_executor_params_t *params,
-                                            ucc_ee_executor_t **executor);
-    ucc_status_t (*executor_create_test)(ucc_ee_executor_t *executor);
+    ucc_status_t (*executor_init)(const ucc_ee_executor_params_t *params,
+                                    ucc_ee_executor_t **executor);
+    ucc_status_t (*executor_status)(const ucc_ee_executor_t *executor);
+    ucc_status_t (*executor_start)(ucc_ee_executor_t *executor,
+                                    void *ee_context);
+    ucc_status_t (*executor_stop)(ucc_ee_executor_t *executor);
+    ucc_status_t (*executor_free)(ucc_ee_executor_t *executor);
     ucc_status_t (*executor_task_post)(ucc_ee_executor_task_args_t *task_args,
                                        ucc_ee_executor_task_t **task,
                                        ucc_ee_executor_t *executor);
     ucc_status_t (*executor_task_test)(ucc_ee_executor_task_t *task);
-    ucc_status_t (*executor_destroy)(ucc_ee_executor_t *executor);
 } ucc_ee_executor_ops_t;
 
 typedef struct ucc_mc_base {
