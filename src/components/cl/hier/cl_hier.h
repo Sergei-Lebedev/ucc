@@ -10,6 +10,7 @@
 #include "components/cl/ucc_cl_log.h"
 #include "components/tl/ucc_tl.h"
 #include "coll_score/ucc_coll_score.h"
+#include "schedule/ucc_schedule_pipelined.h"
 
 #ifndef UCC_CL_HIER_DEFAULT_SCORE
 #define UCC_CL_HIER_DEFAULT_SCORE 50
@@ -37,7 +38,7 @@ typedef struct ucc_cl_hier_lib_config {
     size_t                   a2av_node_thresh;
     uint32_t                 allreduce_hybrid_n_frags;
     uint32_t                 allreduce_hybrid_pipeline_depth;
-    uint32_t                 allreduce_hybrid_seq;
+    ucc_pipeline_order_t     allreduce_hybrid_pipeline_order;
     size_t                   allreduce_hybrid_frag_thresh;
     size_t                   allreduce_hybrid_frag_size;
 } ucc_cl_hier_lib_config_t;

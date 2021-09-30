@@ -57,10 +57,10 @@ static ucc_config_field_t ucc_cl_hier_lib_config_table[] = {
      ucc_offsetof(ucc_cl_hier_lib_config_t, allreduce_hybrid_pipeline_depth),
      UCC_CONFIG_TYPE_UINT},
 
-    {"ALLREDUCE_HYBRID_SEQUENTIAL", "0",
+    {"ALLREDUCE_HYBRID_PIPELINE_ORDER", "sequential",
      "Type of pipelined schedule for hybrid AR (sequential/parallel)",
-     ucc_offsetof(ucc_cl_hier_lib_config_t, allreduce_hybrid_seq),
-     UCC_CONFIG_TYPE_UINT},
+     ucc_offsetof(ucc_cl_hier_lib_config_t, allreduce_hybrid_pipeline_order),
+     UCC_CONFIG_TYPE_ARRAY(ucc_pipeline_order)},
 
     {NULL}
 };

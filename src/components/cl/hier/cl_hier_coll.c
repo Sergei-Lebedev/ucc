@@ -536,7 +536,8 @@ ucc_status_t ucc_cl_hier_allreduce_init(ucc_base_coll_args_t *coll_args,
     ucc_schedule_pipelined_init(coll_args, team,
                                 ucc_cl_hier_allreduce_hybrid_frag_init,
                                 ucc_cl_hier_allreduce_hybrid_setup_frag,
-                                pipeline_depth, n_frags, cfg->allreduce_hybrid_seq,
+                                pipeline_depth, n_frags,
+                                cfg->allreduce_hybrid_pipeline_order,
                                 &schedule->super);
     schedule->super.super.super.flags |= UCC_COLL_TASK_FLAG_CB2;
     schedule->super.super.super.cb2.cb = ucc_cl_hier_allreduce_schedule_done;

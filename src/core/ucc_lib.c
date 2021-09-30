@@ -14,8 +14,8 @@
 #include "components/tl/ucc_tl.h"
 #include "ucc_mc.h"
 
-UCS_CONFIG_DEFINE_ARRAY(cl_types, sizeof(ucc_cl_type_t),
-                        UCS_CONFIG_TYPE_ENUM(ucc_cl_names));
+UCC_CONFIG_DEFINE_ARRAY(cl_types, sizeof(ucc_cl_type_t),
+                        UCC_CONFIG_TYPE_ENUM(ucc_cl_names));
 
 static ucc_config_field_t ucc_lib_config_table[] = {
     {"CLS", "basic", "Comma separated list of CL components to be used",
