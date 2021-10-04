@@ -81,7 +81,12 @@ static ucc_config_field_t ucc_tl_ucp_lib_config_table[] = {
      ucc_offsetof(ucc_tl_ucp_lib_config_t, allreduce_sra_kn_pipeline_order),
      UCC_CONFIG_TYPE_ARRAY(ucc_pipeline_order)},
 
-    {"REDUCE_SCATTER_KN_RADIX", "4",
+    {"ALLREDUCE_SRA_KN_USE_EEE", "y",
+     "Whether or not SRA KN allreduce should use EventEngineExecutor",
+     ucc_offsetof(ucc_tl_ucp_lib_config_t, allreduce_sra_kn_use_eee),
+     UCC_CONFIG_TYPE_BOOL},
+
+     {"REDUCE_SCATTER_KN_RADIX", "4",
      "Radix of the knomial reduce-scatter algorithm",
      ucc_offsetof(ucc_tl_ucp_lib_config_t, reduce_scatter_kn_radix),
      UCC_CONFIG_TYPE_UINT},

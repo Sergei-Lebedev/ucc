@@ -82,6 +82,11 @@ typedef struct ucc_tl_ucp_task {
 #define TASK_LIB(_task)                                                        \
     (ucc_derived_of((_task)->super.team->context->lib, ucc_tl_ucp_lib_t))
 
+typedef struct ucc_tl_ucp_schedule {
+    ucc_schedule_pipelined_t super;
+    ucc_ee_executor_t       *eee;
+} ucc_tl_ucp_schedule_t;
+
 static inline void ucc_tl_ucp_task_reset(ucc_tl_ucp_task_t *task)
 {
     task->send_posted        = 0;
@@ -124,11 +129,11 @@ static inline ucc_schedule_t *ucc_tl_ucp_get_schedule(ucc_tl_ucp_team_t *team)
     return schedule;
 }
 
-static inline ucc_schedule_pipelined_t *
-ucc_tl_ucp_get_schedule_pipelined(ucc_tl_ucp_team_t *team)
+static inline ucc_tl_ucp_schedule_t *
+ucc_tl_ucp_get_tl_ucp_schedule(ucc_tl_ucp_team_t *team)
 {
-    ucc_tl_ucp_context_t     *ctx      = UCC_TL_UCP_TEAM_CTX(team);
-    ucc_schedule_pipelined_t *schedule = ucc_mpool_get(&ctx->req_mp);
+    ucc_tl_ucp_context_t  *ctx      = UCC_TL_UCP_TEAM_CTX(team);
+    ucc_tl_ucp_schedule_t *schedule = ucc_mpool_get(&ctx->req_mp);
 
     UCC_TL_UCP_PROFILE_REQUEST_NEW(schedule, "tl_ucp_sched_p", 0);
     return schedule;
@@ -141,7 +146,7 @@ static inline void ucc_tl_ucp_put_schedule(ucc_schedule_t *schedule)
 }
 
 static inline void
-ucc_tl_ucp_put_schedule_pipelined(ucc_schedule_pipelined_t *schedule)
+ucc_tl_ucp_put_tl_ucp_schedule(ucc_tl_ucp_schedule_t *schedule)
 {
     UCC_TL_UCP_PROFILE_REQUEST_FREE(schedule);
     ucc_mpool_put(schedule);

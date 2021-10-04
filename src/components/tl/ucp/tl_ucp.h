@@ -53,6 +53,7 @@ typedef struct ucc_tl_ucp_lib_config {
     ucc_pipeline_order_t allreduce_sra_kn_pipeline_order;
     size_t               allreduce_sra_kn_frag_thresh;
     size_t               allreduce_sra_kn_frag_size;
+    int                  allreduce_sra_kn_use_eee;
 } ucc_tl_ucp_lib_config_t;
 
 typedef struct ucc_tl_ucp_context_config {

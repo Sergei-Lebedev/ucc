@@ -147,15 +147,15 @@ UCC_KN_PHASE_EXTRA:
             local_data  = PTR_OFFSET(sbuf, local_seg_offset * dt_size);
             reduce_data = task->reduce_scatter_kn.scratch;
             if (!task->reduce_scatter_kn.eee) {
-            if (UCC_OK != (status = ucc_dt_reduce_multi(
-                               local_data, rbuf, reduce_data,
-                               task->send_posted - p->iteration * (radix - 1),
-                               local_seg_count, local_seg_count * dt_size, dt,
-                               mem_type, args))) {
-                tl_error(UCC_TASK_LIB(task), "failed to perform dt reduction");
-                task->super.super.status = status;
-                return status;
-            }
+                if (UCC_OK != (status = ucc_dt_reduce_multi(
+                                   local_data, rbuf, reduce_data,
+                                   task->send_posted - p->iteration * (radix - 1),
+                                   local_seg_count, local_seg_count * dt_size, dt,
+                                   mem_type, args))) {
+                    tl_error(UCC_TASK_LIB(task), "failed to perform dt reduction");
+                    task->super.super.status = status;
+                    return status;
+                }
             } else {
                 ucc_ee_executor_task_args_t exec_args;
                 exec_args.task_type     = UCC_MC_EE_EXECUTOR_TASK_TYPE_REDUCE;
@@ -222,9 +222,7 @@ UCC_KN_PHASE_EXTRA:
         if (UCC_OK != status) {
             return status;
         }
-    } else if (1) {
-        task->reduce_scatter_kn.eee = NULL;
-    } else {
+    }  else {
         ucc_ee_executor_task_args_t exec_args;
         exec_args.task_type   = UCC_MC_EE_EXECUTOR_TASK_TYPE_COPY;
         exec_args.src1.buffer = task->reduce_scatter_kn.scratch;

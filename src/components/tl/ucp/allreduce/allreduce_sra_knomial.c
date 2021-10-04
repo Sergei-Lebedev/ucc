@@ -168,20 +168,53 @@ static inline void get_sra_n_frags(ucc_base_coll_args_t *coll_args,
 static ucc_status_t
 ucc_tl_ucp_allreduce_sra_knomial_finalize(ucc_coll_task_t *task)
 {
-    ucc_schedule_pipelined_t *schedule =
-        ucc_derived_of(task, ucc_schedule_pipelined_t);
+    ucc_tl_ucp_schedule_t *schedule =
+        ucc_derived_of(task, ucc_tl_ucp_schedule_t);
     ucc_status_t status;
 
     UCC_TL_UCP_PROFILE_REQUEST_EVENT(schedule, "ucp_allreduce_sra_kn_done", 0);
     status = ucc_schedule_pipelined_finalize(task);
-    ucc_tl_ucp_put_schedule_pipelined(schedule);
+
+    if (schedule->eee) {
+        ucc_ee_executor_free(schedule->eee);
+    }
+
+    ucc_tl_ucp_put_tl_ucp_schedule(schedule);
     return status;
 }
 
 ucc_status_t ucc_tl_ucp_allreduce_sra_knomial_start(ucc_coll_task_t *task)
 {
+    ucc_tl_ucp_schedule_t *schedule =
+        ucc_derived_of(task, ucc_tl_ucp_schedule_t);
+    ucc_status_t status;
+
     UCC_TL_UCP_PROFILE_REQUEST_EVENT(task, "ucp_allreduce_sra_kn_start", 0);
+
+    if (schedule->eee) {
+        status = ucc_ee_executor_start(schedule->eee, NULL);
+        if (ucc_unlikely(status != UCC_OK)) {
+            tl_error(task->team->context->lib, "failed to statusart ee executor");
+            return status;
+        }
+        do {
+            status = ucc_ee_executor_status(schedule->eee);
+        } while (status == UCC_INPROGRESS);
+        if (ucc_unlikely(status != UCC_OK)) {
+            tl_error(task->team->context->lib, "failed to statusart ee executor");
+            return status;
+        }
+    }
     return ucc_schedule_pipelined_post(task);
+}
+
+void ucc_tl_ucp_allreduce_sra_knomial_done(void *data, ucc_status_t status)
+{
+    ucc_tl_ucp_schedule_t *schedule = data;
+
+    if (schedule->eee) {
+        ucc_ee_executor_stop(schedule->eee);
+    }
 }
 
 ucc_status_t
@@ -192,28 +225,56 @@ ucc_tl_ucp_allreduce_sra_knomial_init(ucc_base_coll_args_t *coll_args,
     ucc_tl_ucp_team_t        *tl_team = ucc_derived_of(team, ucc_tl_ucp_team_t);
     ucc_tl_ucp_lib_config_t  *cfg     = &UCC_TL_UCP_TEAM_LIB(tl_team)->cfg;
     int                       n_frags, pipeline_depth;
-    ucc_schedule_pipelined_t *schedule_p =
-        ucc_tl_ucp_get_schedule_pipelined(tl_team);
+    ucc_tl_ucp_schedule_t    *schedule_p =
+        ucc_tl_ucp_get_tl_ucp_schedule(tl_team);
     ucc_status_t status;
 
     if (!schedule_p) {
         tl_error(team->context->lib, "failed to allocate pipelined schedule");
         return UCC_ERR_NO_MEMORY;
     }
+
+    if (cfg->allreduce_sra_kn_use_eee &&
+        coll_args->args.src.info.mem_type == UCC_MEMORY_TYPE_CUDA &&
+        !(coll_args->mask & UCC_BASE_COLL_ARGS_FIELD_EEE)) {
+        ucc_ee_executor_params_t exec_params;
+        ucc_ee_executor_t *eee;
+
+        exec_params.ee_type = UCC_EE_CUDA_STREAM;
+        status = ucc_ee_executor_init(&exec_params, &eee);
+        if (ucc_unlikely(status != UCC_OK)) {
+            tl_error(team->context->lib, "failed to init ee executor");
+            return status;
+        }
+        schedule_p->eee = eee;
+        coll_args->mask |= UCC_BASE_COLL_ARGS_FIELD_EEE;
+        coll_args->eee = eee;
+
+    } else {
+        schedule_p->eee = NULL;
+    }
+
     get_sra_n_frags(coll_args, tl_team, &n_frags, &pipeline_depth);
     status = ucc_schedule_pipelined_init(
         coll_args, team, ucc_tl_ucp_allreduce_sra_knomial_frag_init,
         ucc_tl_ucp_allreduce_sra_knomial_frag_setup, pipeline_depth, n_frags,
-        cfg->allreduce_sra_kn_pipeline_order, schedule_p);
+        cfg->allreduce_sra_kn_pipeline_order, &schedule_p->super);
     if (UCC_OK != status) {
         tl_error(team->context->lib, "failed to init pipelined schedule");
-        ucc_tl_ucp_put_schedule_pipelined(schedule_p);
+        ucc_tl_ucp_put_tl_ucp_schedule(schedule_p);
         return status;
     }
-    schedule_p->super.super.finalize =
+
+    if (schedule_p->eee) {
+        schedule_p->super.super.super.flags |= UCC_COLL_TASK_FLAG_CB2;
+        schedule_p->super.super.super.cb2.cb = ucc_tl_ucp_allreduce_sra_knomial_done;
+        schedule_p->super.super.super.cb2.data = (void*)schedule_p;
+    }
+    schedule_p->super.super.super.finalize =
         ucc_tl_ucp_allreduce_sra_knomial_finalize;
-    schedule_p->super.super.triggered_post = ucc_core_triggered_post;
-    schedule_p->super.super.post = ucc_tl_ucp_allreduce_sra_knomial_start;
-    *task_h                                = &schedule_p->super.super;
+    schedule_p->super.super.super.triggered_post = ucc_core_triggered_post;
+    schedule_p->super.super.super.post = ucc_tl_ucp_allreduce_sra_knomial_start;
+
+    *task_h                                = &schedule_p->super.super.super;
     return UCC_OK;
 }
