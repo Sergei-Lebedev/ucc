@@ -107,6 +107,12 @@ static inline int ucc_knomial_pattern_loop_done(ucc_knomial_pattern_t *p)
     return p->iteration == p->pow_radix_sup;
 }
 
+static inline int ucc_knomial_pattern_loop_last(ucc_knomial_pattern_t *p)
+{
+    ucc_assert(p->iteration <= p->pow_radix_sup);
+    return (p->iteration + 1)  == p->pow_radix_sup;
+}
+
 static inline int
 ucc_knomial_pattern_loop_done_backward(ucc_knomial_pattern_t *p)
 {

@@ -130,6 +130,7 @@ UCC_KN_PHASE_EXTRA:
             return task->super.super.status;
         }
         if (task->send_posted > p->iteration * (radix - 1)) {
+
             sbuf       = (p->iteration == 0)
                 ? ((KN_NODE_PROXY == node_type  || UCC_IS_INPLACE(*args)) ?
                    args->dst.info.buffer : args->src.info.buffer)
@@ -147,6 +148,17 @@ UCC_KN_PHASE_EXTRA:
                 block_count, step_radix, local_seg_index);
             local_data  = PTR_OFFSET(sbuf, local_seg_offset * dt_size);
             reduce_data = task->reduce_scatter_kn.scratch;
+            if (ucc_knomial_pattern_loop_last(p)) {
+                size_t lsc2;
+                ucc_sra_kn_get_offset_and_seglen(count, dt_size, rank, size, radix,
+                                                 &offset, &lsc2);
+                ucc_assert(lsc2 == local_seg_count);
+                if (args->coll_type != UCC_COLL_TYPE_ALLREDUCE) {
+                    offset = 0;
+                }
+                reduce_data = PTR_OFFSET(args->dst.info.buffer, offset);
+            }
+
             if (!task->reduce_scatter_kn.eee) {
                 if (UCC_OK != (status = ucc_dt_reduce_multi(
                                    local_data, rbuf, reduce_data,
@@ -214,6 +226,7 @@ UCC_KN_PHASE_EXTRA:
         ucc_knomial_pattern_next_iteration(p);
     }
 
+#if 0
     ucc_sra_kn_get_offset_and_seglen(count, dt_size, rank, size, radix, &offset, &local_seg_count);
     /* if (args->coll_type == UCC_COLL_TYPE_ALLREDUCE) { */
         /* offset = ucc_sra_kn_get_offset(count, dt_size, rank, size, radix); */
@@ -252,6 +265,7 @@ UCC_KN_PHASE_EXTRA:
         } while (status != UCC_OK);
 
     }
+#endif
 
 UCC_KN_PHASE_PROXY: /* unused label */
 out:
