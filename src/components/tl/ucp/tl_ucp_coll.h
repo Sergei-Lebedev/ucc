@@ -26,6 +26,8 @@ extern const char
         }                                                                      \
     } while (0)
 
+#define MAX_EEE_TASKS 8
+
 typedef struct ucc_tl_ucp_task {
     ucc_coll_task_t   super;
     uint32_t          send_posted;
@@ -51,7 +53,7 @@ typedef struct ucc_tl_ucp_task {
             ucc_knomial_pattern_t   p;
             void                   *scratch;
             ucc_mc_buffer_header_t *scratch_mc_header;
-            ucc_ee_executor_task_t *exec_task;
+            ucc_ee_executor_task_t *exec_tasks[MAX_EEE_TASKS];
             ucc_ee_executor_t      *eee;
         } reduce_scatter_kn;
         struct {

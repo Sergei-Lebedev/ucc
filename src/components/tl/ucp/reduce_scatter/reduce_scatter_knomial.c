@@ -39,6 +39,7 @@ ucc_tl_ucp_reduce_scatter_knomial_progress(ucc_coll_task_t *coll_task)
     size_t                 data_size = count * dt_size;
     ucc_rank_t             size      = team->size;
     ucc_rank_t             rank      = team->rank;
+    uint32_t               n_eee_tasks = UCC_TL_UCP_TEAM_LIB(team)->cfg.allreduce_sra_kn_n_eee_tasks;
     ptrdiff_t              peer_seg_offset, local_seg_offset, offset;
     ucc_rank_t             peer, step_radix, peer_seg_index, local_seg_index;
     ucc_status_t           status;
@@ -157,53 +158,59 @@ UCC_KN_PHASE_EXTRA:
                     return status;
                 }
             } else {
-                ucc_ee_executor_task_args_t exec_args;
-                exec_args.task_type     = UCC_MC_EE_EXECUTOR_TASK_TYPE_REDUCE;
-                exec_args.src1.buffer   = local_data;
-                exec_args.src1.count    = local_seg_count;
-                exec_args.src1.datatype = dt;
+                size_t count_per_task = local_seg_count / n_eee_tasks;
+                size_t left           = local_seg_count % n_eee_tasks;
+                int t;
+                for (t = 0; t < n_eee_tasks; t++) {
+                    offset = t * count_per_task + left;
+                    if (t < left) {
+                        count_per_task++;
+                        offset -= left - t;
+                    }
 
-                exec_args.src2.buffer   = rbuf;
-                exec_args.src2.count    = local_seg_count;
-                exec_args.src2.datatype = dt;
+                    ucc_ee_executor_task_args_t exec_args;
+                    exec_args.task_type     = UCC_MC_EE_EXECUTOR_TASK_TYPE_REDUCE;
+                    exec_args.src1.buffer   = PTR_OFFSET(local_data, offset * dt_size);
+                    exec_args.src1.count    = count_per_task;
+                    exec_args.src1.datatype = dt;
 
-                exec_args.dst.buffer    = reduce_data;
-                exec_args.dst.count     = local_seg_count;
-                exec_args.dst.datatype  = dt;
-                exec_args.op            = UCC_OP_SUM; //tTODO from args
-                status = ucc_ee_executor_task_post(&exec_args,
-                                               &task->reduce_scatter_kn.exec_task,
-                                               task->reduce_scatter_kn.eee);
-                if (ucc_unlikely(status != UCC_OK)) {
-                    task->super.super.status = status;
-                    return status;
+                    exec_args.src2.buffer   = PTR_OFFSET(rbuf, offset * dt_size);
+                    exec_args.src2.count    = count_per_task;
+                    exec_args.src2.datatype = dt;
+
+                    exec_args.dst.buffer    = PTR_OFFSET(reduce_data, offset * dt_size);
+                    exec_args.dst.count     = count_per_task;
+                    exec_args.dst.datatype  = dt;
+                    exec_args.op            = UCC_OP_SUM; //tTODO from args
+                    status = ucc_ee_executor_task_post(&exec_args,
+                                                       &task->reduce_scatter_kn.exec_tasks[t],
+                                                       task->reduce_scatter_kn.eee);
+                    if (ucc_unlikely(status != UCC_OK)) {
+                        task->super.super.status = status;
+                        return status;
+                    }
                 }
-                /* do { */
-                /*     status = ucc_ee_executor_task_test(task->reduce_scatter_kn.exec_task); */
-                /*     if (status < 0) { */
-                /*         task->super.super.status = status; */
-                /*         return status; */
-                /*     } */
-                /* } while (status != UCC_OK); */
-                /* task->reduce_scatter_kn.exec_task = NULL; */
             }
         }
 
     UCC_KN_PHASE_REDUCE:
-
-        if (task->reduce_scatter_kn.exec_task) {
-            status = ucc_ee_executor_task_test(task->reduce_scatter_kn.exec_task);
-            if (UCC_OK != status) {
-                if (status > 0) {
-                    status = UCC_INPROGRESS;
+        {
+            int t;
+            for (t = 0; t < n_eee_tasks; t++) {
+                if (task->reduce_scatter_kn.exec_tasks[t]) {
+                    status = ucc_ee_executor_task_test(task->reduce_scatter_kn.exec_tasks[t]);
+                    if (UCC_OK != status) {
+                        if (status > 0) {
+                            status = UCC_INPROGRESS;
+                        }
+                        SAVE_STATE(UCC_KN_PHASE_REDUCE);
+                        task->super.super.status = status;
+                        return task->super.super.status;
+                    }
+                    task->reduce_scatter_kn.exec_tasks[t] = NULL;
                 }
-                SAVE_STATE(UCC_KN_PHASE_REDUCE);
-                task->super.super.status = status;
-                return task->super.super.status;
             }
-            task->reduce_scatter_kn.exec_task = NULL;
         }
-
         ucc_knomial_pattern_next_iteration(p);
     }
 
@@ -230,14 +237,14 @@ UCC_KN_PHASE_EXTRA:
         exec_args.dst.buffer  = PTR_OFFSET(args->dst.info.buffer, offset);
         exec_args.dst.count   = local_seg_count * dt_size;
         status = ucc_ee_executor_task_post(&exec_args,
-                                           &task->reduce_scatter_kn.exec_task,
+                                           &task->reduce_scatter_kn.exec_tasks[0],
                                            task->reduce_scatter_kn.eee);
         if (ucc_unlikely(status != UCC_OK)) {
             task->super.super.status = status;
             return status;
         }
         do {
-            status = ucc_ee_executor_task_test(task->reduce_scatter_kn.exec_task);
+            status = ucc_ee_executor_task_test(task->reduce_scatter_kn.exec_tasks[0]);
             if (status < 0) {
                 task->super.super.status = status;
                 return status;
@@ -265,7 +272,8 @@ ucc_status_t ucc_tl_ucp_reduce_scatter_knomial_start(ucc_coll_task_t *coll_task)
     UCC_TL_UCP_PROFILE_REQUEST_EVENT(coll_task, "ucp_reduce_scatter_kn_start",
                                      0);
     ucc_tl_ucp_task_reset(task);
-    task->reduce_scatter_kn.exec_task = NULL;
+    memset(task->reduce_scatter_kn.exec_tasks, 0,
+           sizeof(task->reduce_scatter_kn.exec_tasks));
     ucc_knomial_pattern_init(team->size, team->rank,
                              task->reduce_scatter_kn.p.radix,
                              &task->reduce_scatter_kn.p);

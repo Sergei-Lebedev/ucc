@@ -54,6 +54,7 @@ typedef struct ucc_tl_ucp_lib_config {
     size_t               allreduce_sra_kn_frag_thresh;
     size_t               allreduce_sra_kn_frag_size;
     int                  allreduce_sra_kn_use_eee;
+    uint32_t             allreduce_sra_kn_n_eee_tasks;
 } ucc_tl_ucp_lib_config_t;
 
 typedef struct ucc_tl_ucp_context_config {
