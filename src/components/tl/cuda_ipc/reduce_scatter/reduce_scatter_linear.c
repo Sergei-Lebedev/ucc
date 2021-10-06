@@ -29,8 +29,8 @@ ucc_tl_cuda_ipc_reduce_scatter_linear_progress(ucc_coll_task_t *coll_task)
                                                           ucc_tl_cuda_ipc_task_t);
     ucc_tl_cuda_ipc_team_t *team     = TASK_TEAM(task);
     uint32_t                coll_id   = task->reduce_scatter_linear.coll_id;
-    size_t                  ccount    = coll_task->args.dst.info.count;
-    ucc_datatype_t          dt        = coll_task->args.dst.info.datatype;
+    size_t                  ccount    = coll_task->args.src.info.count / team->size;
+    ucc_datatype_t          dt        = coll_task->args.src.info.datatype;
     size_t                  data_size = ccount * ucc_dt_size(dt);
     ucc_rank_t              num_done = 0;
     ucc_ee_executor_task_args_t exec_args;
@@ -48,9 +48,9 @@ ucc_tl_cuda_ipc_reduce_scatter_linear_progress(ucc_coll_task_t *coll_task)
             }
         }
         for (i = 0 ; i < NUM_POSTS; i++) {
-            block_count = ucc_reduce_scatter_linear_block_count(coll_task->args.dst.info.count,
+            block_count = ucc_reduce_scatter_linear_block_count(ccount,
                                                                 NUM_POSTS, i);
-            block_offset = ucc_reduce_scatter_linear_block_offset(coll_task->args.dst.info.count,
+            block_offset = ucc_reduce_scatter_linear_block_offset(ccount,
                                                                 NUM_POSTS, i) * ucc_dt_size(dt);
             exec_args.task_type    = UCC_MC_EE_EXECUTOR_TASK_TYPE_REDUCE_MULTI;
             exec_args.dst.buffer   = PTR_OFFSET(coll_task->args.dst.info.buffer, block_offset);
