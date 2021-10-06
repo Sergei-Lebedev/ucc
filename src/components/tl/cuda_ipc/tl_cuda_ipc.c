@@ -28,6 +28,11 @@ static ucc_config_field_t ucc_tl_cuda_ipc_lib_config_table[] = {
      ucc_offsetof(ucc_tl_cuda_ipc_lib_config_t, num_rings),
      UCC_CONFIG_TYPE_UINT},
 
+    {"LINEAR_N_TASKS", "1",
+     "Number of eee tasks used for each op in linear alg",
+     ucc_offsetof(ucc_tl_cuda_ipc_lib_config_t, linear_n_tasks),
+     UCC_CONFIG_TYPE_UINT},
+
     {NULL}};
 
 static ucs_config_field_t ucc_tl_cuda_ipc_context_config_table[] = {

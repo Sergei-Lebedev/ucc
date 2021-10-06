@@ -170,10 +170,11 @@ UCC_KN_PHASE_EXTRA:
                     return status;
                 }
             } else {
-                size_t count_per_task = local_seg_count / n_eee_tasks;
-                size_t left           = local_seg_count % n_eee_tasks;
                 int t;
                 for (t = 0; t < n_eee_tasks; t++) {
+                    size_t count_per_task = local_seg_count / n_eee_tasks;
+                    size_t left           = local_seg_count % n_eee_tasks;
+
                     offset = t * count_per_task + left;
                     if (t < left) {
                         count_per_task++;

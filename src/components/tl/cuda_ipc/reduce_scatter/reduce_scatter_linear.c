@@ -32,60 +32,78 @@ ucc_tl_cuda_ipc_reduce_scatter_linear_progress(ucc_coll_task_t *coll_task)
     size_t                  ccount    = coll_task->args.src.info.count / team->size;
     ucc_datatype_t          dt        = coll_task->args.src.info.datatype;
     size_t                  data_size = ccount * ucc_dt_size(dt);
+    uint32_t n_linear_tasks = UCC_TL_CUDA_IPC_TEAM_LIB(team)->cfg.linear_n_tasks;
     ucc_rank_t              num_done = 0;
     ucc_ee_executor_task_args_t exec_args;
-    size_t block_offset, block_count;
-    ucc_rank_t i, peer;
+    size_t block_offset, block_count, offset, left, task_count;
+    ucc_rank_t i, peer, t;
     mem_info_t *peer_info, *my_info;
     ucc_status_t st;
 
 
-    if (task->reduce_scatter_linear.exec_task[0] == NULL) {
+
+    if (!task->reduce_scatter_linear.sync_done) {
         for (peer = 0; peer < team->size; peer++) {
             if (GET_MEM_INFO(team, coll_id, peer)->seq_num[1] != task->seq_num) {
                 task->super.super.status = UCC_INPROGRESS;
                 goto exit;
             }
         }
+        task->reduce_scatter_linear.sync_done = 1;
         for (i = 0 ; i < NUM_POSTS; i++) {
             block_count = ucc_reduce_scatter_linear_block_count(ccount,
                                                                 NUM_POSTS, i);
             block_offset = ucc_reduce_scatter_linear_block_offset(ccount,
                                                                 NUM_POSTS, i) * ucc_dt_size(dt);
-            exec_args.task_type    = UCC_MC_EE_EXECUTOR_TASK_TYPE_REDUCE_MULTI;
-            exec_args.dst.buffer   = PTR_OFFSET(coll_task->args.dst.info.buffer, block_offset);
-            exec_args.dst.count    = block_count;
-            exec_args.dst.datatype = UCC_DT_FLOAT32;
-            exec_args.src3_size    = team->size;
-            for (peer = 0; peer < team->size; peer++) {
-                void *src;
-                if (peer == team->rank) {
-                    src = PTR_OFFSET(coll_task->args.src.info.buffer, data_size * team->rank);
-                } else {
-                    peer_info = GET_MEM_INFO(team, coll_id, peer);
-                    src = PTR_OFFSET(task->reduce_scatter_linear.peer_map_addr[peer],
-                                    peer_info->offset + data_size * team->rank);
+            for (t = 0; t < n_linear_tasks; t++) {
+                task_count = block_count / n_linear_tasks;
+                left = block_count % n_linear_tasks;
+                offset = t * task_count + left;
+                if (t < left) {
+                    task_count++;
+                    offset -= left - t;
                 }
-                exec_args.src3[peer] = PTR_OFFSET(src, block_offset);
-            }
-            st = ucc_ee_executor_task_post(&exec_args,
-                                           &task->reduce_scatter_linear.exec_task[i],
-                                           schedule->eee);
-            if (ucc_unlikely(st != UCC_OK)) {
-                task->super.super.status = st;
-                goto exit;
+                offset *= ucc_dt_size(dt);
+                exec_args.task_type    = UCC_MC_EE_EXECUTOR_TASK_TYPE_REDUCE_MULTI;
+                exec_args.dst.buffer   = PTR_OFFSET(coll_task->args.dst.info.buffer, block_offset + offset);
+                exec_args.dst.count    = task_count;
+                exec_args.dst.datatype = UCC_DT_FLOAT32;
+                exec_args.src3_size    = team->size;
+
+
+                for (peer = 0; peer < team->size; peer++) {
+                    void *src;
+                    if (peer == team->rank) {
+                        src = PTR_OFFSET(coll_task->args.src.info.buffer, data_size * team->rank);
+                    } else {
+                        peer_info = GET_MEM_INFO(team, coll_id, peer);
+                        src = PTR_OFFSET(task->reduce_scatter_linear.peer_map_addr[peer],
+                                         peer_info->offset + data_size * team->rank);
+                    }
+                    exec_args.src3[peer] = PTR_OFFSET(src, block_offset + offset);
+                }
+                st = ucc_ee_executor_task_post(&exec_args,
+                                               &task->reduce_scatter_linear.exec_task[i][t],
+                                               schedule->eee);
+                if (ucc_unlikely(st != UCC_OK)) {
+                    task->super.super.status = st;
+                    goto exit;
+                }
             }
         }
     }
-
     for (i = 0; i < NUM_POSTS; i++) {
-        st = ucc_ee_executor_task_test(task->reduce_scatter_linear.exec_task[i]);
-        if (st != UCC_OK) {
-            task->super.super.status = UCC_INPROGRESS;
-            goto exit;
+        for (t = 0; t < n_linear_tasks; t++) {
+            if (task->reduce_scatter_linear.exec_task[i][t]) {
+                st = ucc_ee_executor_task_test(task->reduce_scatter_linear.exec_task[i][t]);
+                if (st != UCC_OK) {
+                    task->super.super.status = UCC_INPROGRESS;
+                    goto exit;
+                }
+                task->reduce_scatter_linear.exec_task[i][t] = NULL;
+            }
         }
     }
-
     my_info = GET_MEM_INFO(team, coll_id, team->rank);
     __sync_synchronize();
     asm volatile("": : :"memory");
@@ -112,12 +130,15 @@ ucc_tl_cuda_ipc_reduce_scatter_linear_start(ucc_coll_task_t *coll_task)
     ucc_tl_cuda_ipc_team_t *team = TASK_TEAM(task);
     mem_info_t             *info = GET_MEM_INFO(team, task->reduce_scatter_linear.coll_id,
                                                 team->rank);
-    ucc_rank_t r;
+    uint32_t n_linear_tasks = UCC_TL_CUDA_IPC_TEAM_LIB(team)->cfg.linear_n_tasks;
+    ucc_rank_t r, t;
 
     coll_task->super.status = UCC_INPROGRESS;
-
+    task->reduce_scatter_linear.sync_done = 0;
     for (r = 0; r < team->size; r++) {
-        task->reduce_scatter_linear.exec_task[r] = NULL;
+        for (t = 0; t < n_linear_tasks; t++) {
+            task->reduce_scatter_linear.exec_task[r][t] = NULL;
+        }
     }
     __sync_synchronize();
     asm volatile("": : :"memory");
@@ -268,7 +289,6 @@ ucc_tl_cuda_ipc_reduce_scatter_linear_init(ucc_base_coll_args_t *coll_args,
     ucc_tl_cuda_ipc_task_t *task;
     ucc_ee_executor_params_t exec_params;
     ucc_status_t status;
-
     if (UCC_IS_INPLACE(coll_args->args)) {
         ucc_tl_cuda_ipc_put_schedule(schedule);
         return UCC_ERR_NOT_SUPPORTED;

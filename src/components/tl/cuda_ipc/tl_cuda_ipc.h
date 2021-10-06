@@ -40,6 +40,7 @@ typedef struct ucc_tl_cuda_ipc_lib_config {
     ucc_tl_lib_config_t super;
     uint32_t            max_concurrent;
     uint32_t            num_rings;
+    uint32_t            linear_n_tasks;
 } ucc_tl_cuda_ipc_lib_config_t;
 
 

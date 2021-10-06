@@ -27,6 +27,7 @@ enum {
 };
 
 #define MAX_STATIC_SIZE 16
+#define N_LINEAR_TASKS  4
 
 typedef struct ucc_tl_cuda_ipc_task {
     ucc_coll_task_t      super;
@@ -56,7 +57,8 @@ typedef struct ucc_tl_cuda_ipc_task {
         struct {
             void                   **peer_map_addr;
             uint32_t                coll_id;
-            ucc_ee_executor_task_t *exec_task[MAX_STATIC_SIZE];
+            int                     sync_done;
+            ucc_ee_executor_task_t *exec_task[MAX_STATIC_SIZE][N_LINEAR_TASKS];
         } reduce_scatter_linear;
         struct {
             uint32_t                step;
