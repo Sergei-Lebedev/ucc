@@ -45,9 +45,11 @@ void ucc_tl_cuda_ipc_rings_init(ucc_rank_t team_size)
         map = dgx_map1;
     } else if (team_size == 4) {
         map = dgx_map2;
-    } else if (team_size == 8) {
+    } else {
+        ucc_assert(team_size == 8);
         map = dgx_map8;
     }
+
 
     for (i = 0; i < N_DGX_RINGS; i++) {
         for (j = 0; j < team_size; j++) {

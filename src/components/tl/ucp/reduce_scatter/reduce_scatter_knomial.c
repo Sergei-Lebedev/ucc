@@ -242,7 +242,7 @@ UCC_KN_PHASE_EXTRA:
         if (UCC_OK != status) {
             return status;
         }
-    }  else {
+    } else {
         ucc_ee_executor_task_args_t exec_args;
         exec_args.task_type   = UCC_MC_EE_EXECUTOR_TASK_TYPE_COPY;
         exec_args.src1.buffer = task->reduce_scatter_kn.scratch;

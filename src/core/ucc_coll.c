@@ -275,7 +275,7 @@ static ucc_status_t ucc_wait_for_event_trigger(ucc_coll_task_t *coll_task)
 {
 //    ucc_context_t     *ctx = coll_task->team->context->ucc_context;
     ucc_ev_t          *post_event, *ev;
-    ucc_status_t       status;
+    ucc_status_t       status = UCC_OK;
 
     if (coll_task->ev == NULL) {
         if (coll_task->ee->ee_type == UCC_EE_CUDA_STREAM) {
@@ -369,7 +369,7 @@ static ucc_status_t ucc_wait_for_event_trigger(ucc_coll_task_t *coll_task)
     //     coll_task->super.status = UCC_OK;
     // }
 
-    return UCC_OK;
+    return status;
 }
 
 static ucc_status_t ucc_core_triggered_coll_finalize(ucc_coll_task_t *coll_task)
