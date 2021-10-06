@@ -102,11 +102,13 @@ typedef struct ucc_mc_cuda_stream_request {
     cudaStream_t        stream;
 } ucc_mc_cuda_stream_request_t;
 
+#define MAX_EXEC_TASKS 512
+
 typedef struct ucc_mc_cuda_executor {
     ucc_ee_executor_t             super;
     ucc_mc_cuda_executor_state_t  state;
     int                           pidx;
-    ucc_ee_executor_task_t        tasks[32];
+    ucc_ee_executor_task_t        tasks[MAX_EXEC_TASKS];
     ucc_mc_cuda_executor_state_t *dev_state;
     ucc_ee_executor_task_t       *dev_tasks;
     int                          *dev_pidx;

@@ -166,7 +166,7 @@ __global__ void executor_kernel(volatile ucc_mc_cuda_executor_t *eee)
             if (*state == UCC_MC_CUDA_EXECUTOR_SHUTDOWN) {
                 worker_done = true;
             } else {
-                task_ptr = &eee->dev_tasks[*cidx % 32];
+                task_ptr = &eee->dev_tasks[*cidx % MAX_EXEC_TASKS];
                 task = *task_ptr;//eee->dev_tasks[*cidx % 32];
             }
             atomicAdd(eee->dev_cidx, 1);

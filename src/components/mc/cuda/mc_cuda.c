@@ -887,7 +887,7 @@ ucc_status_t ucc_cuda_executor_task_post(ucc_ee_executor_task_args_t *task_args,
                                                  ucc_mc_cuda_executor_t);
     ucc_ee_executor_task_t *ee_task;
 
-    ee_task = &(eee->tasks[eee->pidx % 32]);
+    ee_task = &(eee->tasks[eee->pidx % MAX_EXEC_TASKS]);
     ee_task->eee = executor;
     ee_task->status = UCC_OPERATION_INITIALIZED;
     memcpy(&ee_task->args, task_args, sizeof(ucc_ee_executor_task_args_t));
