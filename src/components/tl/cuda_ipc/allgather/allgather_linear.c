@@ -70,7 +70,11 @@ ucc_status_t ucc_tl_cuda_ipc_allgather_linear_progress(ucc_coll_task_t *coll_tas
         }
     }
 
-    task->super.super.status = (num_done == team->size) ? UCC_OK: UCC_INPROGRESS;
+    if (num_done == team->size) {
+        UCC_TL_CUDA_IPC_PROFILE_REQUEST_EVENT(coll_task, "cuda_ipc_ag_linear_done", 0);
+        task->super.super.status = UCC_OK;
+    }
+
 exit:
     return task->super.super.status;
 }
@@ -85,7 +89,7 @@ ucc_status_t ucc_tl_cuda_ipc_allgather_linear_start(ucc_coll_task_t *coll_task)
     ucc_rank_t r;
 
     coll_task->super.status = UCC_INPROGRESS;
-
+    UCC_TL_CUDA_IPC_PROFILE_REQUEST_EVENT(coll_task, "cuda_ipc_ag_linear_start", 0);
     for (r = 0; r < team->size; r++) {
         task->allgather_linear.exec_task[r] = NULL;
     }
