@@ -36,6 +36,8 @@ typedef struct ucc_tl_cuda_ipc_task {
     cudaStream_t         stream;
     cudaEvent_t          event;
     void                *data[MAX_STATIC_SIZE];
+    int                  eee_external;
+    ucc_ee_executor_t   *eee;
     union {
         struct {
             void                    *info;
@@ -98,6 +100,8 @@ ucc_tl_cuda_ipc_task_t *ucc_tl_cuda_ipc_get_task(ucc_tl_cuda_ipc_team_t *team)
     task->super.super.status = UCC_OPERATION_INITIALIZED;
     task->super.flags        = 0;
     task->super.team         = &team->super.super;
+    task->eee_external       = 0;
+    task->eee                = NULL;
     ucc_tl_cuda_ipc_task_reset(task);
     return task;
 }
