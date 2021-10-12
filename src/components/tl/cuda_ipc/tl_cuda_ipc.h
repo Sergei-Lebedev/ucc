@@ -15,7 +15,7 @@
 #include <cuda.h>
 #include <cuda_runtime.h>
 #ifndef UCC_TL_CUDA_IPC_DEFAULT_SCORE
-#define UCC_TL_CUDA_IPC_DEFAULT_SCORE 30
+#define UCC_TL_CUDA_IPC_DEFAULT_SCORE 40
 #endif
 
 #ifdef HAVE_PROFILING_TL_CUDA_IPC

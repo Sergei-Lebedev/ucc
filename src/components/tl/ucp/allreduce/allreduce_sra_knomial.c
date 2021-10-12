@@ -16,6 +16,7 @@
 #include "../reduce_scatter/reduce_scatter.h"
 #include "../allgather/allgather.h"
 
+
 /* SRA - scatter-reduce-allgather knomial algorithm
    1. The algorithm performs collective allreduce operation as a sequence of
       K-nomial Reduce-Scatter followed by K-nomial (with the same radix K)
@@ -172,6 +173,7 @@ ucc_tl_ucp_allreduce_sra_knomial_finalize(ucc_coll_task_t *task)
         ucc_derived_of(task, ucc_tl_ucp_schedule_t);
     ucc_status_t status;
 
+    /* nvtxRangeEnd(schedule->super.super.super.id); */
     UCC_TL_UCP_PROFILE_REQUEST_EVENT(schedule, "ucp_allreduce_sra_kn_done", 0);
     status = ucc_schedule_pipelined_finalize(task);
 
@@ -189,6 +191,8 @@ ucc_status_t ucc_tl_ucp_allreduce_sra_knomial_start(ucc_coll_task_t *task)
         ucc_derived_of(task, ucc_tl_ucp_schedule_t);
     ucc_status_t status;
 
+    /* schedule->super.super.super.id = nvtxRangeStartA("SRA_start"); */
+    nvtxMarkA("sra_start");
     UCC_TL_UCP_PROFILE_REQUEST_EVENT(task, "ucp_allreduce_sra_kn_start", 0);
 
     if (schedule->eee) {
@@ -253,6 +257,9 @@ ucc_tl_ucp_allreduce_sra_knomial_init(ucc_base_coll_args_t *coll_args,
     } else {
         schedule_p->eee = NULL;
     }
+
+
+
 
     get_sra_n_frags(coll_args, tl_team, &n_frags, &pipeline_depth);
     status = ucc_schedule_pipelined_init(

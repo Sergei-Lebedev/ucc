@@ -9,6 +9,7 @@
 #include "utils/ucc_list.h"
 #include "utils/ucc_log.h"
 #include "utils/ucc_lock_free_queue.h"
+#include <nvToolsExt.h>
 
 #define MAX_LISTENERS 16
 
@@ -69,9 +70,11 @@ typedef struct ucc_coll_task {
         /* used for lf mt progress queue */
         ucc_lf_queue_elem_t          lf_elem;
     };
+
     uint8_t n_deps;
     uint8_t n_deps_satisfied;
     uint8_t n_deps_base;
+    nvtxRangeId_t     id;
 } ucc_coll_task_t;
 
 typedef struct ucc_context ucc_context_t;
