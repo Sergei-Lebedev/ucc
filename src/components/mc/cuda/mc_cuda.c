@@ -8,6 +8,7 @@
 #include "utils/ucc_malloc.h"
 #include <cuda_runtime.h>
 #include <cuda.h>
+//#include <nvToolsExt.h>
 
 static const char *stream_task_modes[] = {
     [UCC_MC_CUDA_TASK_KERNEL]  = "kernel",
@@ -62,6 +63,17 @@ static ucc_config_field_t ucc_mc_cuda_config_table[] = {
      "Number of thread blocks to use for cuda executor",
      ucc_offsetof(ucc_mc_cuda_config_t, exec_num_workers),
      UCC_CONFIG_TYPE_ULUNITS},
+
+    {"EXEC_NUM_THREADS", "512",
+     "Number of thread per block to use for cuda executor",
+     ucc_offsetof(ucc_mc_cuda_config_t, exec_num_threads),
+     UCC_CONFIG_TYPE_ULUNITS},
+
+    {"EXEC_MAX_TASKS", "128",
+     "Maximum number of outstanding tasks per executor",
+     ucc_offsetof(ucc_mc_cuda_config_t, exec_max_tasks),
+     UCC_CONFIG_TYPE_ULUNITS},
+
 
     {NULL}
 
@@ -118,15 +130,19 @@ static void ucc_mc_cuda_ee_executor_mpool_chunk_free(ucc_mpool_t *mp,
 
 static void ucc_mc_cuda_ee_executor_init(ucc_mpool_t *mp, void *obj, void *chunk)
 {
-    ucc_mc_cuda_executor_t *eee = (ucc_mc_cuda_executor_t*) obj;
+    ucc_mc_cuda_executor_t *eee       = (ucc_mc_cuda_executor_t*) obj;
+    int                     max_tasks = MC_CUDA_CONFIG->exec_max_tasks;
 
     CUDA_FUNC(cudaHostGetDevicePointer(
                   (void**)(&eee->dev_state), (void *)&eee->state, 0));
     CUDA_FUNC(cudaHostGetDevicePointer(
                   (void**)(&eee->dev_pidx), (void *)&eee->pidx, 0));
+    CUDA_FUNC(cudaMalloc((void**)&eee->dev_cidx, sizeof(*eee->dev_cidx)));
+    CUDA_FUNC(cudaHostAlloc((void**)&eee->tasks,
+                            max_tasks * sizeof(ucc_ee_executor_task_t),
+                            cudaHostAllocMapped));
     CUDA_FUNC(cudaHostGetDevicePointer(
                   (void**)(&eee->dev_tasks), (void *)eee->tasks, 0));
-    CUDA_FUNC(cudaMalloc((void**)&eee->dev_cidx, sizeof(*eee->dev_cidx)));
 }
 
 static void ucc_mc_cuda_executor_chunk_cleanup(ucc_mpool_t *mp, void *obj)
@@ -134,6 +150,7 @@ static void ucc_mc_cuda_executor_chunk_cleanup(ucc_mpool_t *mp, void *obj)
     ucc_mc_cuda_executor_t *eee = (ucc_mc_cuda_executor_t*) obj;
 
     CUDA_FUNC(cudaFree((void*)eee->dev_cidx));
+    CUDA_FUNC(cudaFreeHost((void*)eee->tasks));
 }
 
 static ucc_mpool_ops_t ucc_mc_cuda_ee_executor_mpool_ops = {
@@ -849,11 +866,13 @@ ucc_status_t ucc_cuda_executor_stop(ucc_ee_executor_t *executor)
                                                  ucc_mc_cuda_executor_t);
     volatile ucc_mc_cuda_executor_state_t *st = &eee->state;
 
+    // nvtxMarkA("destroy executor");
     mc_debug(&ucc_mc_cuda.super, "CUDA executor stop, eee: %p", eee);
     /* can be safely ended only if it's in STARTED or COMPLETED_ACK state */
     ucc_assert((*st != UCC_MC_CUDA_EXECUTOR_POSTED) &&
                (*st != UCC_MC_CUDA_EXECUTOR_SHUTDOWN));
     *st = UCC_MC_CUDA_EXECUTOR_SHUTDOWN;
+    eee->pidx = -1;
     while(*st != UCC_MC_CUDA_EXECUTOR_SHUTDOWN_ACK) { }
     eee->super.ee_context = NULL;
     eee->state = UCC_MC_CUDA_EXECUTOR_INITIALIZED;
@@ -876,6 +895,15 @@ ucc_status_t ucc_cuda_executor_free(ucc_ee_executor_t *executor)
 ucc_status_t ucc_cuda_executor_task_test(ucc_ee_executor_task_t *task)
 {
     CUDACHECK(cudaGetLastError());
+    // if (task->status == UCC_OK) {
+    //     nvtxEventAttributes_t eventAttrib = {0};
+    //     eventAttrib.version = NVTX_VERSION;
+    //     eventAttrib.category = (uint32_t)((uint64_t)task);
+    //     eventAttrib.size = NVTX_EVENT_ATTRIB_STRUCT_SIZE;
+    //     eventAttrib.messageType = NVTX_MESSAGE_TYPE_ASCII;
+    //     eventAttrib.message.ascii = "task done";
+    //     nvtxMarkEx(&eventAttrib);
+    // }
     return task->status;
 }
 
@@ -883,34 +911,19 @@ ucc_status_t ucc_cuda_executor_task_post(ucc_ee_executor_task_args_t *task_args,
                                          ucc_ee_executor_task_t **task,
                                          ucc_ee_executor_t *executor)
 {
-    ucc_mc_cuda_executor_t *eee = ucc_derived_of(executor,
-                                                 ucc_mc_cuda_executor_t);
+    ucc_mc_cuda_executor_t *eee       = ucc_derived_of(executor,
+                                                       ucc_mc_cuda_executor_t);
+    int                     max_tasks = MC_CUDA_CONFIG->exec_max_tasks;
     ucc_ee_executor_task_t *ee_task;
 
-    ee_task = &(eee->tasks[eee->pidx % MAX_EXEC_TASKS]);
+//    nvtxMarkA("post task");
+    ee_task = &(eee->tasks[eee->pidx % max_tasks]);
     ee_task->eee = executor;
     ee_task->status = UCC_OPERATION_INITIALIZED;
     memcpy(&ee_task->args, task_args, sizeof(ucc_ee_executor_task_args_t));
     eee->pidx += 1;
 
     *task = ee_task;
-    return UCC_OK;
-}
-
-ucc_status_t ucc_cuda_executor_destroy(ucc_ee_executor_t *executor)
-{
-    ucc_mc_cuda_executor_t *eee = ucc_derived_of(executor,
-                                                 ucc_mc_cuda_executor_t);
-    volatile ucc_mc_cuda_executor_state_t *st = &eee->state;
-
-    /* can be safely ended only if it's in STARTED or COMPLETED_ACK state */
-    ucc_assert((*st != UCC_MC_CUDA_EXECUTOR_POSTED) &&
-               (*st != UCC_MC_CUDA_EXECUTOR_SHUTDOWN));
-    *st = UCC_MC_CUDA_EXECUTOR_SHUTDOWN;
-    eee->pidx = 64;
-    while(*st != UCC_MC_CUDA_EXECUTOR_SHUTDOWN_ACK) { }
-    ucc_mpool_put(eee);
-    mc_info(&ucc_mc_cuda.super, "CUDA executor destroyed, eee: %p", eee);
     return UCC_OK;
 }
 
