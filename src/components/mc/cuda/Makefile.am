@@ -17,6 +17,7 @@ libucc_mc_cuda_la_LDFLAGS  = -version-info $(SOVERSION) --as-needed $(CUDA_LDFLA
 libucc_mc_cuda_la_LIBADD   = $(CUDA_LIBS)                      \
                              $(UCC_TOP_BUILDDIR)/src/libucc.la \
                              kernel/libucc_mc_cuda_kernels.la
+                            #  -lnvToolsExt
 
 include $(top_srcdir)/config/module.am
 endif

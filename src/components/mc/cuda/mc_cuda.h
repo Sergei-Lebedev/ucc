@@ -73,6 +73,8 @@ typedef struct ucc_mc_cuda_config {
     size_t                         mpool_elem_size;
     int                            mpool_max_elems;
     unsigned long                  exec_num_workers;
+    unsigned long                  exec_num_threads;
+    unsigned long                  exec_max_tasks;
 } ucc_mc_cuda_config_t;
 
 typedef struct ucc_mc_cuda {
@@ -106,7 +108,7 @@ typedef struct ucc_mc_cuda_executor {
     ucc_ee_executor_t             super;
     ucc_mc_cuda_executor_state_t  state;
     int                           pidx;
-    ucc_ee_executor_task_t        tasks[32];
+    ucc_ee_executor_task_t       *tasks;
     ucc_mc_cuda_executor_state_t *dev_state;
     ucc_ee_executor_task_t       *dev_tasks;
     int                          *dev_pidx;
