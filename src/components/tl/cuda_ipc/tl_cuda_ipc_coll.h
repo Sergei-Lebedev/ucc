@@ -73,7 +73,7 @@ typedef struct ucc_tl_cuda_ipc_task {
         struct {
             void                   **peer_map_addr;
             uint32_t                coll_id;
-            ucc_ee_executor_task_t *exec_task[MAX_STATIC_SIZE];
+            ucc_ee_executor_task_t *exec_task[MAX_STATIC_SIZE][N_LINEAR_TASKS];
         } allgather_linear;
     };
 } ucc_tl_cuda_ipc_task_t;

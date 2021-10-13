@@ -9,19 +9,22 @@ ucc_status_t ucc_tl_cuda_ipc_allgather_linear_progress(ucc_coll_task_t *coll_tas
     size_t                  ccount    = coll_task->args.dst.info.count / team->size;
     ucc_datatype_t          dt        = coll_task->args.dst.info.datatype;
     size_t                  data_size = ccount * ucc_dt_size(dt);
+    uint32_t n_linear_tasks = UCC_TL_CUDA_IPC_TEAM_LIB(team)->cfg.linear_n_tasks;    
     ucc_rank_t              num_done = 0;
     ucc_rank_t              start = 0;
-    ucc_rank_t i, peer;
+    ucc_rank_t i, peer, t;
     mem_info_t *peer_info, *my_info;
     ucc_status_t st;
-
+    size_t offset, left, task_count;
+    
     if (UCC_IS_INPLACE(coll_task->args)) {
         start = 1;
         num_done = 1;
     }
+
     for (i = start; i < team->size; i++) {
         peer = (team->rank + i) % team->size;
-        if ((task->allgather_linear.exec_task[peer] == NULL) &&
+        if ((task->allgather_linear.exec_task[peer][0] == NULL) &&
             (GET_MEM_INFO(team, coll_id, peer)->seq_num[1] == task->seq_num)) {
             ucc_ee_executor_task_args_t exec_args;
             void                        *src, *dst;
@@ -34,25 +37,48 @@ ucc_status_t ucc_tl_cuda_ipc_allgather_linear_progress(ucc_coll_task_t *coll_tas
             }
             dst = PTR_OFFSET(coll_task->args.dst.info.buffer, peer * data_size);
 
-            exec_args.task_type   = UCC_MC_EE_EXECUTOR_TASK_TYPE_COPY;
-            exec_args.src1.buffer = src;
-            exec_args.src1.count  = data_size;
-            exec_args.dst.buffer  = dst;
-            exec_args.dst.count   = data_size;
-            st = ucc_ee_executor_task_post(&exec_args,
-                                           &task->allgather_linear.exec_task[peer],
-                                           task->eee);
-            if (ucc_unlikely(st != UCC_OK)) {
-                task->super.super.status = st;
-                goto exit;
+            for (t = 0; t < n_linear_tasks; t++) {
+                task_count = ccount / n_linear_tasks;
+                left = ccount % n_linear_tasks;
+                offset = t * task_count + left;
+                if (t < left) {
+                    task_count++;
+                    offset -= left - t;
+                }
+                offset *= ucc_dt_size(dt);
+
+                exec_args.task_type   = UCC_MC_EE_EXECUTOR_TASK_TYPE_COPY;
+                exec_args.src1.buffer = PTR_OFFSET(src, offset);
+                exec_args.src1.count  = task_count * ucc_dt_size(dt);
+                exec_args.dst.buffer  = PTR_OFFSET(dst, offset);
+                exec_args.dst.count   = task_count * ucc_dt_size(dt);
+                st = ucc_ee_executor_task_post(&exec_args,
+                                               &task->allgather_linear.exec_task[peer][t],
+                                               task->eee);
+                if (ucc_unlikely(st != UCC_OK)) {
+                    task->super.super.status = st;
+                    goto exit;
+                }
             }
         }
-        if ((task->allgather_linear.exec_task[peer] != NULL) &&
-            (ucc_ee_executor_task_test(task->allgather_linear.exec_task[peer]) == UCC_OK)) {
+
+        int completed = 0;
+        for (t = 0; t < n_linear_tasks; t++) {
+            if (NULL != task->allgather_linear.exec_task[peer][t]) {
+                if ((void*)0x1 != task->allgather_linear.exec_task[peer][t]) {
+                    st = ucc_ee_executor_task_test(task->allgather_linear.exec_task[peer][t]);
+                    if (st != UCC_OK) {
+                        break;
+                    }
+                    task->allgather_linear.exec_task[peer][t] = (void*)0x1;
+                }
+                completed++;
+            }
+        }
+        if (completed == n_linear_tasks) {
             num_done++;
         }
     }
-
     if (num_done == team->size) {
         my_info = GET_MEM_INFO(team, coll_id, team->rank);
         __sync_synchronize();
@@ -85,13 +111,15 @@ ucc_status_t ucc_tl_cuda_ipc_allgather_linear_start(ucc_coll_task_t *coll_task)
     ucc_tl_cuda_ipc_team_t *team = TASK_TEAM(task);
     mem_info_t             *info = GET_MEM_INFO(team, task->allgather_linear.coll_id,
                                                 team->rank);
-    ucc_rank_t r;
+    ucc_rank_t r, t;
 
     coll_task->super.status = UCC_INPROGRESS;
     coll_task->id = nvtxRangeStartA("ag_ipc_start");
     UCC_TL_CUDA_IPC_PROFILE_REQUEST_EVENT(coll_task, "cuda_ipc_ag_linear_start", 0);
     for (r = 0; r < team->size; r++) {
-        task->allgather_linear.exec_task[r] = NULL;
+        for (t = 0; t < N_LINEAR_TASKS; t++) {
+            task->allgather_linear.exec_task[r][t] = NULL;
+        }
     }
     __sync_synchronize();
     asm volatile("": : :"memory");
