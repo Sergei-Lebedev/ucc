@@ -37,8 +37,7 @@ ucc_tl_cuda_ipc_reduce_scatter_linear_progress(ucc_coll_task_t *coll_task)
     ucc_rank_t i, peer, t;
     mem_info_t *peer_info, *my_info;
     ucc_status_t st;
-
-
+    ptrdiff_t frag_offset = coll_task->frag_offset;
 
     if (!task->reduce_scatter_linear.sync_done) {
         for (peer = 0; peer < team->size; peer++) {
@@ -76,7 +75,7 @@ ucc_tl_cuda_ipc_reduce_scatter_linear_progress(ucc_coll_task_t *coll_task)
                     } else {
                         peer_info = GET_MEM_INFO(team, coll_id, peer);
                         src = PTR_OFFSET(task->reduce_scatter_linear.peer_map_addr[peer],
-                                         peer_info->offset + data_size * team->rank);
+                                         peer_info->offset + data_size * team->rank + frag_offset);
                     }
                     exec_args.src3[peer] = PTR_OFFSET(src, block_offset + offset);
                 }
@@ -102,6 +101,7 @@ ucc_tl_cuda_ipc_reduce_scatter_linear_progress(ucc_coll_task_t *coll_task)
             }
         }
     }
+
     my_info = GET_MEM_INFO(team, coll_id, team->rank);
     __sync_synchronize();
     asm volatile("": : :"memory");

@@ -302,20 +302,23 @@ ucc_status_t ucc_cl_hier_allreduce_hybrid_setup_frag(ucc_schedule_pipelined_t *s
     task_ar = frag->tasks[1];
     task_ag = frag->tasks[2];
 
+    task_rs->frag_offset          = frag_offset * dt_size;
     task_rs->args.src.info.buffer = PTR_OFFSET(args->src.info.buffer, frag_offset * dt_size);
     task_rs->args.dst.info.buffer = PTR_OFFSET(args->dst.info.buffer, (frag_offset + offset) * dt_size);
-    task_rs->args.src.info.count = frag_count;
-    task_rs->args.dst.info.count = frag_count;
+    task_rs->args.src.info.count  = frag_count;
+    task_rs->args.dst.info.count  = frag_count;
+
 
     ucc_assert(UCC_IS_INPLACE(task_ag->args));
     task_ag->args.dst.info.buffer = PTR_OFFSET(args->dst.info.buffer, frag_offset * dt_size);//only dst since inplace
     task_ag->args.src.info.count = frag_count;
     task_ag->args.dst.info.count = frag_count;
+    task_ag->frag_offset        = frag_offset * dt_size;
 
     ucc_assert(UCC_IS_INPLACE(task_ar->args));
     task_ar->args.src.info.count = ar_count;
     task_ar->args.dst.info.buffer = task_rs->args.dst.info.buffer;
-
+    task_ar->frag_offset        = frag_offset * dt_size;
     return UCC_OK;
 }
 

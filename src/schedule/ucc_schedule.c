@@ -41,6 +41,7 @@ ucc_status_t ucc_coll_task_init(ucc_coll_task_t *task, ucc_coll_args_t *args,
     task->n_deps               = 0;
     task->n_deps_satisfied     = 0;
     task->early_triggered_post = NULL;
+    task->frag_offset          = 0;
     if (args) {
         memcpy(&task->args, args, sizeof(*args));
     }

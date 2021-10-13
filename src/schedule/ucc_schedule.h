@@ -75,6 +75,7 @@ typedef struct ucc_coll_task {
     uint8_t n_deps_satisfied;
     uint8_t n_deps_base;
     nvtxRangeId_t     id;
+    ptrdiff_t frag_offset;
 } ucc_coll_task_t;
 
 typedef struct ucc_context ucc_context_t;

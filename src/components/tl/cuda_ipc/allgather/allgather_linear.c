@@ -16,12 +16,12 @@ ucc_status_t ucc_tl_cuda_ipc_allgather_linear_progress(ucc_coll_task_t *coll_tas
     mem_info_t *peer_info, *my_info;
     ucc_status_t st;
     size_t offset, left, task_count;
-    
+    ptrdiff_t frag_offset = coll_task->frag_offset;
+
     if (UCC_IS_INPLACE(coll_task->args)) {
         start = 1;
         num_done = 1;
     }
-
     for (i = start; i < team->size; i++) {
         peer = (team->rank + i) % team->size;
         if ((task->allgather_linear.exec_task[peer][0] == NULL) &&
@@ -33,7 +33,10 @@ ucc_status_t ucc_tl_cuda_ipc_allgather_linear_progress(ucc_coll_task_t *coll_tas
                 src = coll_task->args.src.info.buffer;
             } else {
                 src = PTR_OFFSET(task->allgather_linear.peer_map_addr[peer],
-                                 peer_info->offset);
+                                 peer_info->offset + frag_offset);
+                if (UCC_IS_INPLACE(coll_task->args)) {
+                    src = PTR_OFFSET(src, peer * data_size);
+                }
             }
             dst = PTR_OFFSET(coll_task->args.dst.info.buffer, peer * data_size);
 
@@ -156,7 +159,6 @@ ucc_status_t ucc_tl_cuda_ipc_allgather_linear_setup(ucc_coll_task_t *coll_task)
 {
     ucc_tl_cuda_ipc_task_t *task      = ucc_derived_of(coll_task, ucc_tl_cuda_ipc_task_t);
     ucc_tl_cuda_ipc_team_t *team      = TASK_TEAM(task);
-    ucc_rank_t              trank     = team->rank;
     size_t                  ccount    = coll_task->args.dst.info.count / team->size;
     ucc_datatype_t          dt        = coll_task->args.dst.info.datatype;
     size_t                  data_size = ccount * ucc_dt_size(dt);
@@ -169,7 +171,8 @@ ucc_status_t ucc_tl_cuda_ipc_allgather_linear_setup(ucc_coll_task_t *coll_task)
     ucc_cuda_ipc_cache_t   *cache;
 
     if (UCC_IS_INPLACE(coll_task->args)) {
-        data_buf = PTR_OFFSET(coll_task->args.dst.info.buffer, data_size * trank);
+        data_buf = coll_task->args.dst.info.buffer;
+        data_size = coll_task->args.dst.info.count * ucc_dt_size(dt);
     } else {
         data_buf = coll_task->args.src.info.buffer;
     }

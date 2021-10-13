@@ -181,6 +181,7 @@ ucc_status_t ucc_schedule_pipelined_init(
         ucc_event_manager_subscribe(
             &frags[i]->super.em, UCC_EVENT_COMPLETED, &schedule->super.super,
                         ucc_schedule_pipelined_completed_handler);
+        frags[i]->super.schedule = &schedule->super;
     }
     return UCC_OK;
 err:
