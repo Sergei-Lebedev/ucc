@@ -159,18 +159,12 @@ UCC_KN_PHASE_EXTRA:
             } else {
                 ucc_ee_executor_task_args_t exec_args;
                 exec_args.task_type     = UCC_MC_EE_EXECUTOR_TASK_TYPE_REDUCE;
-                exec_args.src1.buffer   = local_data;
-                exec_args.src1.count    = local_seg_count;
-                exec_args.src1.datatype = dt;
-
-                exec_args.src2.buffer   = rbuf;
-                exec_args.src2.count    = local_seg_count;
-                exec_args.src2.datatype = dt;
-
-                exec_args.dst.buffer    = reduce_data;
-                exec_args.dst.count     = local_seg_count;
-                exec_args.dst.datatype  = dt;
-                exec_args.op            = UCC_OP_SUM; //tTODO from args
+                exec_args.bufs[0] = reduce_data;
+                exec_args.bufs[1] = local_data;
+                exec_args.bufs[2] = rbuf;
+                exec_args.count   = local_seg_count;
+                exec_args.dt      = dt;
+                exec_args.op      = UCC_OP_SUM; //TODO from args
                 status = ucc_ee_executor_task_post(&exec_args,
                                                &task->reduce_scatter_kn.exec_task,
                                                task->reduce_scatter_kn.eee);
@@ -227,10 +221,9 @@ UCC_KN_PHASE_EXTRA:
     } else {
         ucc_ee_executor_task_args_t exec_args;
         exec_args.task_type   = UCC_MC_EE_EXECUTOR_TASK_TYPE_COPY;
-        exec_args.src1.buffer = task->reduce_scatter_kn.scratch;
-        exec_args.src1.count  = local_seg_count * dt_size;
-        exec_args.dst.buffer  = PTR_OFFSET(args->dst.info.buffer, offset);
-        exec_args.dst.count   = local_seg_count * dt_size;
+        exec_args.bufs[0] = PTR_OFFSET(args->dst.info.buffer, offset);
+        exec_args.bufs[1] = task->reduce_scatter_kn.scratch;
+        exec_args.count   = local_seg_count * dt_size;
         status = ucc_ee_executor_task_post(&exec_args,
                                            &task->reduce_scatter_kn.exec_task,
                                            task->reduce_scatter_kn.eee);

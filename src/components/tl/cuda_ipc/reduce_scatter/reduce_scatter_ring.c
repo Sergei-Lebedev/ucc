@@ -104,18 +104,13 @@ ucc_status_t ucc_tl_cuda_ipc_reduce_scatter_ring_progress(ucc_coll_task_t *coll_
             remote_offset = max_count * ucc_dt_size(dt);
             local_offset = 0;
         }
-        exec_args.task_type     = UCC_MC_EE_EXECUTOR_TASK_TYPE_REDUCE;
-        exec_args.src1.buffer   = PTR_OFFSET(sbuf, (block_offset + frag_offset) * ucc_dt_size(dt));
-        exec_args.src1.count    = frag_count;
-        exec_args.src1.datatype = dt;
-        exec_args.src2.buffer   = PTR_OFFSET(task->reduce_scatter.peer_map_addr,
-                                             peer_info->offset + remote_offset);
-        exec_args.src2.count    = frag_count;
-        exec_args.src2.datatype = dt;
-        exec_args.dst.buffer    = (task->reduce_scatter.step == tsize -1 ) ? PTR_OFFSET(dbuf, frag_offset * ucc_dt_size(dt)): PTR_OFFSET(scratch, local_offset);
-        exec_args.dst.count     = frag_count;
-        exec_args.dst.datatype  = dt;
-        exec_args.op            = UCC_OP_SUM;
+        exec_args.task_type = UCC_MC_EE_EXECUTOR_TASK_TYPE_REDUCE;
+        exec_args.bufs[0]   = (task->reduce_scatter.step == tsize -1 ) ? PTR_OFFSET(dbuf, frag_offset * ucc_dt_size(dt)): PTR_OFFSET(scratch, local_offset);
+        exec_args.bufs[1]   = PTR_OFFSET(sbuf, (block_offset + frag_offset) * ucc_dt_size(dt));
+        exec_args.bufs[2]   = PTR_OFFSET(task->reduce_scatter.peer_map_addr, peer_info->offset + remote_offset);
+        exec_args.count     = frag_count;
+        exec_args.dt        = dt;
+        exec_args.op        = UCC_OP_SUM;
         st = ucc_ee_executor_task_post(&exec_args,
                                        &task->reduce_scatter.exec_task,
                                        schedule->eee);
@@ -151,11 +146,10 @@ ucc_status_t ucc_tl_cuda_ipc_reduce_scatter_ring_start(ucc_coll_task_t *coll_tas
     block_offset = ucc_ring_block_offset(ccount, tsize, block);
     frag_offset = ucc_ring_block_offset(block_count, task->reduce_scatter.n_rings, task->reduce_scatter.ring_id);
 
-    exec_args.task_type   = UCC_MC_EE_EXECUTOR_TASK_TYPE_COPY;
-    exec_args.src1.buffer = PTR_OFFSET(sbuf, (block_offset + frag_offset) * ucc_dt_size(dt));
-    exec_args.src1.count  = frag_count * ucc_dt_size(dt);
-    exec_args.dst.buffer  = scratch;
-    exec_args.dst.count   = frag_count * ucc_dt_size(dt);
+    exec_args.task_type = UCC_MC_EE_EXECUTOR_TASK_TYPE_COPY;
+    exec_args.bufs[0]   = scratch;
+    exec_args.bufs[1]   = PTR_OFFSET(sbuf, (block_offset + frag_offset) * ucc_dt_size(dt));
+    exec_args.count     = frag_count * ucc_dt_size(dt);
     st = ucc_ee_executor_task_post(&exec_args,
                                    &task->reduce_scatter.exec_task,
                                    schedule->eee);

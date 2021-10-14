@@ -143,33 +143,23 @@ typedef struct ucc_ee_executor_params {
     uint64_t        task_types;
 } ucc_ee_executor_params_t;
 
-typedef struct ucc_ee_executor_task_args {
-    ucc_ee_executor_task_type_t task_type;
-    ucc_coll_buffer_info_t      src1;
-    ucc_coll_buffer_info_t      src2;
-    void                       *src3[8];
-    ucc_count_t                 src3_size;
-    ucc_coll_buffer_info_t      dst;
-    ucc_reduction_op_t          op;
-} ucc_ee_executor_task_args_t;
-
+#define UCC_EE_EXECUTOR_NUM_BUFS 9
 /*
  *  buffers[0] - destination
  *  buffers[1] .. buffers[UCC_EE_EXECUTOR_NUM_BUFS - 1] - source
  *  count - number of elements in destination
- *  size - number of operands
- *  stride - step between source buffers
+ *  size - number of operands or step between source buffers
  *  dt - datatype
  *  op - reduction operation
  */
-// typedef struct ucc_ee_executor_task_task {
-//     void               *buffers[UCC_EE_EXECUTOR_NUM_BUFS];
-//     ucc_count_t         count;
-//     ucc_count_t         size;
-//     ucc_count_t         stride;
-//     ucc_datatype_t      dt;
-//     ucc_reduction_op_t  op;
-// } ucc_ee_executor_task_args_t;
+typedef struct ucc_ee_executor_task_task {
+    ucc_ee_executor_task_type_t  task_type;
+    void                        *bufs[UCC_EE_EXECUTOR_NUM_BUFS];
+    ucc_count_t                  count;
+    uint32_t                     size;
+    ucc_datatype_t               dt;
+    ucc_reduction_op_t           op;
+} ucc_ee_executor_task_args_t;
 
 typedef struct ucc_ee_executor_task {
     ucc_ee_executor_t           *eee;

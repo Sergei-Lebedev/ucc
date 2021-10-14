@@ -77,10 +77,9 @@ ucc_status_t ucc_tl_cuda_ipc_alltoallv_progress(ucc_coll_task_t *coll_task)
                     data_displ * dt_size);
 
             exec_args.task_type   = UCC_MC_EE_EXECUTOR_TASK_TYPE_COPY;
-            exec_args.src1.buffer = src;
-            exec_args.src1.count  = data_size * dt_size;
-            exec_args.dst.buffer  = dst;
-            exec_args.dst.count   = data_size * dt_size;
+            exec_args.bufs[1] = src;
+            exec_args.bufs[0] = dst;
+            exec_args.count   = data_size * dt_size;
             st = ucc_ee_executor_task_post(&exec_args,
                                            &task->alltoallv.exec_task[peer],
                                            task->super.ee_task);

@@ -35,18 +35,19 @@ __device__ inline void add_float4(float4 &x, const float4 &y)
 }
 
 __device__ void executor_reduce_float_multi(float **s, float *d,
-                                            size_t count, size_t size)
+                                            size_t count, uint32_t size)
 {
     float4 **s4 = (float4**)s;
     float4  *d4 = (float4*)d;
-    const size_t idx  = threadIdx.x;
-    const size_t step = blockDim.x;
+    const int idx  = threadIdx.x;
+    const int step = blockDim.x;
     const int n = count / 4;
     const int num_iter = n / step + ((idx < n % step) ? 1 : 0);
 
     for(int i = 0; i < num_iter; i++) {
         float4 temp;
         add_float4(temp, s4[0][i * step + idx], s4[1][i * step + idx]);
+#pragma unroll 2
         for(int j = 2; j < size; j++) {
             add_float4(temp, s4[j][i * step + idx]);
         }
@@ -150,9 +151,10 @@ __global__ void executor_kernel(volatile ucc_mc_cuda_executor_t *eee,
     __shared__ bool worker_done;
 
     if (is_master) {
-        pidx  = eee->dev_pidx;
-        cidx  = eee->dev_cidx;
-        tasks = eee->dev_tasks;
+        cidx_local = worker_id;
+        pidx       = eee->dev_pidx;
+        cidx       = eee->dev_cidx;
+        tasks      = eee->dev_tasks;
     }
 
     worker_done = false;
@@ -163,10 +165,10 @@ __global__ void executor_kernel(volatile ucc_mc_cuda_executor_t *eee,
             do {
                 pidx_local = *pidx;
             } while (*cidx == pidx_local);
-            cidx_local = (*cidx)++;
+            (*cidx)++;
             worker_done = (pidx_local == -1);
             if (!worker_done) {
-                args = tasks[cidx_local % q_size].args;
+                args = tasks[cidx_local].args;
             }
         }
         __syncthreads();
@@ -176,46 +178,47 @@ __global__ void executor_kernel(volatile ucc_mc_cuda_executor_t *eee,
         switch (args.task_type) {
             bool aligned;
             case UCC_MC_EE_EXECUTOR_TASK_TYPE_REDUCE:
-                aligned = !(align_pow2((intptr_t)args.src1.buffer, 16) ||
-                            align_pow2((intptr_t)args.src2.buffer, 16) ||
-                            align_pow2((intptr_t)args.dst.buffer, 16));
+                aligned = !(align_pow2((intptr_t)args.bufs[0], 16) ||
+                            align_pow2((intptr_t)args.bufs[1], 16) ||
+                            align_pow2((intptr_t)args.bufs[2], 16));
                 if (aligned) {
-                    executor_reduce_float((float*)args.src1.buffer,
-                                          (float*)args.src2.buffer,
-                                          (float*)args.dst.buffer,
-                                          args.dst.count);
+                    executor_reduce_float((float*)args.bufs[1],
+                                          (float*)args.bufs[2],
+                                          (float*)args.bufs[0],
+                                          args.count);
                 } else {
-                    executor_reduce<float>((float*)args.src1.buffer,
-                                           (float*)args.src2.buffer,
-                                           (float*)args.dst.buffer,
-                                           args.dst.count);
+                    executor_reduce<float>((float*)args.bufs[1],
+                                           (float*)args.bufs[2],
+                                           (float*)args.bufs[0],
+                                           args.count);
                 }
                 break;
             case UCC_MC_EE_EXECUTOR_TASK_TYPE_COPY:
-                aligned = !(align_pow2((intptr_t)args.src1.buffer, 16) ||
-                            align_pow2((intptr_t)args.dst.buffer, 16));
+                aligned = !(align_pow2((intptr_t)args.bufs[0], 16) ||
+                            align_pow2((intptr_t)args.bufs[1], 16));
                 if (aligned) {
-                    executor_copy_aligned<uint4>((uint4*)args.dst.buffer,
-                                                 (uint4*)args.src1.buffer,
-                                                 args.dst.count);
+                    executor_copy_aligned<uint4>((uint4*)args.bufs[0],
+                                                 (uint4*)args.bufs[1],
+                                                 args.count);
 
                 } else {
-                    executor_copy((char*)args.dst.buffer,
-                                  (char*)args.src1.buffer,
-                                   args.dst.count);
+                    executor_copy((char*)args.bufs[0],
+                                  (char*)args.bufs[1],
+                                   args.count);
                 }
                 break;
             case UCC_MC_EE_EXECUTOR_TASK_TYPE_REDUCE_MULTI:
-                executor_reduce_float_multi((float**)args.src3,
-                                            (float*)args.dst.buffer,
-                                            args.dst.count,
-                                            args.src3_size);
+                executor_reduce_float_multi((float**)&args.bufs[1],
+                                            (float*)args.bufs[0],
+                                            args.count,
+                                            args.size);
                 break;
         }
         __syncthreads();
         __threadfence_system();
         if (is_master) {
-            tasks[cidx_local % q_size].status = UCC_OK;
+            tasks[cidx_local].status = UCC_OK;
+            cidx_local = (cidx_local + num_workers) %q_size;
         }
     }
 }
