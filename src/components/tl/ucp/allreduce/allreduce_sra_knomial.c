@@ -192,7 +192,9 @@ ucc_status_t ucc_tl_ucp_allreduce_sra_knomial_start(ucc_coll_task_t *task)
     ucc_status_t status;
 
     /* schedule->super.super.super.id = nvtxRangeStartA("SRA_start"); */
+#ifdef NVTX_ENABLED    
     nvtxMarkA("sra_start");
+#endif
     UCC_TL_UCP_PROFILE_REQUEST_EVENT(task, "ucp_allreduce_sra_kn_start", 0);
 
     if (schedule->eee) {

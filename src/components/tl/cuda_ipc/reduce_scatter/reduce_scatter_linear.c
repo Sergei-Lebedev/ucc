@@ -116,7 +116,9 @@ ucc_tl_cuda_ipc_reduce_scatter_linear_progress(ucc_coll_task_t *coll_task)
     }
 
     if (num_done == team->size) {
+#ifdef NVTX_ENABLED            
         nvtxRangeEnd(coll_task->id);
+#endif        
         UCC_TL_CUDA_IPC_PROFILE_REQUEST_EVENT(coll_task, "cuda_ipc_rs_linear_done", 0);
         task->super.super.status = UCC_OK;
     }
@@ -135,7 +137,9 @@ ucc_tl_cuda_ipc_reduce_scatter_linear_start(ucc_coll_task_t *coll_task)
                                                 team->rank);
     uint32_t n_linear_tasks = UCC_TL_CUDA_IPC_TEAM_LIB(team)->cfg.linear_n_tasks;
     ucc_rank_t r, t;
+#ifdef NVTX_ENABLED        
     coll_task->id = nvtxRangeStartA("rs_ipc_start");
+#endif    
     UCC_TL_CUDA_IPC_PROFILE_REQUEST_EVENT(coll_task, "cuda_ipc_rs_linear_start", 0);
     coll_task->super.status = UCC_INPROGRESS;
     task->reduce_scatter_linear.sync_done = 0;

@@ -119,7 +119,9 @@ UCC_KN_PHASE_PROXY:
 
 out:
     task->super.super.status = UCC_OK;
+#ifdef NVTX_ENABLED    
     nvtxRangeEnd(coll_task->id);
+#endif    
     UCC_TL_UCP_PROFILE_REQUEST_EVENT(coll_task, "ucp_allgather_kn_done", 0);
     return task->super.super.status;
 }
@@ -134,7 +136,9 @@ ucc_status_t ucc_tl_ucp_allgather_knomial_start(ucc_coll_task_t *coll_task)
     ucc_kn_radix_t     radix = task->allgather_kn.p.radix;
     ucc_status_t       status;
     ptrdiff_t          offset;
+#ifdef NVTX_ENABLED    
     coll_task->id = nvtxRangeStartA("ag_kn_start");
+#endif    
     UCC_TL_UCP_PROFILE_REQUEST_EVENT(coll_task, "ucp_allgather_kn_start", 0);
     ucc_tl_ucp_task_reset(task);
 

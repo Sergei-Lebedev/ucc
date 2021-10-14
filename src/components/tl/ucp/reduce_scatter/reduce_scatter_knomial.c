@@ -194,7 +194,9 @@ UCC_KN_PHASE_EXTRA:
                     for (j=0; j < n_received_vecs; j++) {
                         exec_args.src3[j+1] = PTR_OFFSET(rbuf, (local_seg_count * j + offset) * dt_size);
                     }
+#ifdef NVTX_ENABLED
                     task->reduce_scatter_kn.ids[t] = nvtxRangeStartA("eee_reduce");
+#endif                    
                     status = ucc_ee_executor_task_post(&exec_args,
                                                        &task->reduce_scatter_kn.exec_tasks[t],
                                                        task->reduce_scatter_kn.eee);
@@ -221,7 +223,9 @@ UCC_KN_PHASE_EXTRA:
                         return task->super.super.status;
                     }
                     task->reduce_scatter_kn.exec_tasks[t] = NULL;
+#ifdef NVTX_ENABLED                    
                     nvtxRangeEnd(task->reduce_scatter_kn.ids[t]);
+#endif                    
                 }
             }
         }
@@ -230,7 +234,9 @@ UCC_KN_PHASE_EXTRA:
 
 UCC_KN_PHASE_PROXY: /* unused label */
 out:
+#ifdef NVTX_ENABLED    
     nvtxRangeEnd(coll_task->id);
+#endif    
     UCC_TL_UCP_PROFILE_REQUEST_EVENT(coll_task, "ucp_reduce_scatter_kn_done",
                                      0);
     task->super.super.status = UCC_OK;
@@ -245,7 +251,9 @@ ucc_status_t ucc_tl_ucp_reduce_scatter_knomial_start(ucc_coll_task_t *coll_task)
     ucc_status_t       status;
     uint8_t            node_type;
 
+#ifdef NVTX_ENABLED    
     coll_task->id = nvtxRangeStartA("rs_kn_start");
+#endif    
     UCC_TL_UCP_PROFILE_REQUEST_EVENT(coll_task, "ucp_reduce_scatter_kn_start",
                                      0);
     ucc_tl_ucp_task_reset(task);

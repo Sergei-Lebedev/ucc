@@ -9,7 +9,12 @@
 #include "utils/ucc_list.h"
 #include "utils/ucc_log.h"
 #include "utils/ucc_lock_free_queue.h"
+
+#define NVTX_ENABLED
+
+#ifdef NVTX_ENABLED    
 #include <nvToolsExt.h>
+#endif
 
 #define MAX_LISTENERS 16
 
@@ -74,7 +79,9 @@ typedef struct ucc_coll_task {
     uint8_t n_deps;
     uint8_t n_deps_satisfied;
     uint8_t n_deps_base;
+#ifdef NVTX_ENABLED    
     nvtxRangeId_t     id;
+#endif    
     ptrdiff_t frag_offset;
 } ucc_coll_task_t;
 
