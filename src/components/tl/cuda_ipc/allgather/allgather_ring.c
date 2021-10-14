@@ -94,15 +94,14 @@ ucc_status_t ucc_tl_cuda_ipc_allgather_ring_progress(ucc_coll_task_t *coll_task)
         //        (int)trank, (int)recvfrom, (int)block_count, (int)recv_block);
 
         peer_info = GET_MEM_INFO(team, coll_id, recvfrom);
-        exec_args.task_type     = UCC_MC_EE_EXECUTOR_TASK_TYPE_COPY;
-        exec_args.src1.buffer   = PTR_OFFSET(task->allgather.peer_map_addr,
-                                             data_size * recv_block +
-                                             block_offset + peer_info->offset);
-        exec_args.src1.count    = block_count;
-        exec_args.dst.buffer    = PTR_OFFSET(coll_task->args.dst.info.buffer,
-                                             data_size * recv_block +
-                                             block_offset);
-        exec_args.dst.count    = block_count;
+        exec_args.task_type = UCC_MC_EE_EXECUTOR_TASK_TYPE_COPY;
+        exec_args.bufs[1]   = PTR_OFFSET(task->allgather.peer_map_addr,
+                                         data_size * recv_block +
+                                         block_offset + peer_info->offset);
+        exec_args.bufs[0]   = PTR_OFFSET(coll_task->args.dst.info.buffer,
+                                         data_size * recv_block +
+                                         block_offset);
+        exec_args.count      = block_count;
         UCC_TL_CUDA_IPC_PROFILE_REQUEST_EVENT(coll_task, "cuda_ipc_allgather_task_post", 0);
         st = ucc_ee_executor_task_post(&exec_args,
                                        &task->allgather.exec_task,
@@ -144,13 +143,12 @@ ucc_status_t ucc_tl_cuda_ipc_allgather_ring_start(ucc_coll_task_t *coll_task)
                                            task->allgather.ring_id);
         block_offset = ucc_ring_block_offset(data_size, task->allgather.n_rings,
                                              task->allgather.ring_id);
-        exec_args.task_type   = UCC_MC_EE_EXECUTOR_TASK_TYPE_COPY;
-        exec_args.src1.buffer = PTR_OFFSET(coll_task->args.src.info.buffer,
+        exec_args.task_type = UCC_MC_EE_EXECUTOR_TASK_TYPE_COPY;
+        exec_args.bufs[1]   = PTR_OFFSET(coll_task->args.src.info.buffer,
                                            block_offset);
-        exec_args.src1.count  = block_count;
-        exec_args.dst.buffer  = PTR_OFFSET(coll_task->args.dst.info.buffer,
-                                           data_size * trank + block_offset);
-        exec_args.dst.count   = block_count;
+        exec_args.bufs[0]   = PTR_OFFSET(coll_task->args.dst.info.buffer,
+                                         data_size * trank + block_offset);
+        exec_args.count     = block_count;
 
         st = ucc_ee_executor_task_post(&exec_args, &task->allgather.exec_task,
                                        schedule->eee);

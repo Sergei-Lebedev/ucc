@@ -39,6 +39,7 @@ ucc_tl_cuda_ipc_reduce_scatter_linear_progress(ucc_coll_task_t *coll_task)
     ucc_status_t st;
     ptrdiff_t frag_offset = coll_task->frag_offset;
 
+
     if (!task->reduce_scatter_linear.sync_done) {
         for (peer = 0; peer < team->size; peer++) {
             if (GET_MEM_INFO(team, coll_id, peer)->seq_num[1] != task->seq_num) {
@@ -62,10 +63,10 @@ ucc_tl_cuda_ipc_reduce_scatter_linear_progress(ucc_coll_task_t *coll_task)
                 }
                 offset *= ucc_dt_size(dt);
                 exec_args.task_type    = UCC_MC_EE_EXECUTOR_TASK_TYPE_REDUCE_MULTI;
-                exec_args.dst.buffer   = PTR_OFFSET(coll_task->args.dst.info.buffer, block_offset + offset);
-                exec_args.dst.count    = task_count;
-                exec_args.dst.datatype = UCC_DT_FLOAT32;
-                exec_args.src3_size    = team->size;
+                exec_args.bufs[0]   = PTR_OFFSET(coll_task->args.dst.info.buffer, block_offset + offset);
+                exec_args.count    = task_count;
+                exec_args.dt = UCC_DT_FLOAT32;
+                exec_args.size    = team->size;
 
 
                 for (peer = 0; peer < team->size; peer++) {
@@ -77,7 +78,7 @@ ucc_tl_cuda_ipc_reduce_scatter_linear_progress(ucc_coll_task_t *coll_task)
                         src = PTR_OFFSET(task->reduce_scatter_linear.peer_map_addr[peer],
                                          peer_info->offset + data_size * team->rank + frag_offset);
                     }
-                    exec_args.src3[peer] = PTR_OFFSET(src, block_offset + offset);
+                    exec_args.bufs[peer+1] = PTR_OFFSET(src, block_offset + offset);
                 }
                 st = ucc_ee_executor_task_post(&exec_args,
                                                &task->reduce_scatter_linear.exec_task[i][t],

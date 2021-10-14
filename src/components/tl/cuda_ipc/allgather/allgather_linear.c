@@ -51,10 +51,9 @@ ucc_status_t ucc_tl_cuda_ipc_allgather_linear_progress(ucc_coll_task_t *coll_tas
                 offset *= ucc_dt_size(dt);
 
                 exec_args.task_type   = UCC_MC_EE_EXECUTOR_TASK_TYPE_COPY;
-                exec_args.src1.buffer = PTR_OFFSET(src, offset);
-                exec_args.src1.count  = task_count * ucc_dt_size(dt);
-                exec_args.dst.buffer  = PTR_OFFSET(dst, offset);
-                exec_args.dst.count   = task_count * ucc_dt_size(dt);
+                exec_args.bufs[1] = PTR_OFFSET(src, offset);
+                exec_args.bufs[0]  = PTR_OFFSET(dst, offset);
+                exec_args.count   = task_count * ucc_dt_size(dt);
                 st = ucc_ee_executor_task_post(&exec_args,
                                                &task->allgather_linear.exec_task[peer][t],
                                                task->eee);

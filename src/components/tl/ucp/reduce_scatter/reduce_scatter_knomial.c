@@ -158,7 +158,6 @@ UCC_KN_PHASE_EXTRA:
                 }
                 reduce_data = PTR_OFFSET(args->dst.info.buffer, offset);
             }
-
             if (!task->reduce_scatter_kn.eee) {
                 if (UCC_OK != (status = ucc_dt_reduce_multi(
                                    local_data, rbuf, reduce_data,
@@ -183,16 +182,16 @@ UCC_KN_PHASE_EXTRA:
 
                     ucc_ee_executor_task_args_t exec_args;
                     exec_args.task_type     = UCC_MC_EE_EXECUTOR_TASK_TYPE_REDUCE_MULTI;
-                    exec_args.dst.buffer    = PTR_OFFSET(reduce_data, offset * dt_size);
-                    exec_args.dst.count     = count_per_task;
-                    exec_args.dst.datatype  = dt;
+                    exec_args.bufs[0]    = PTR_OFFSET(reduce_data, offset * dt_size);
+                    exec_args.count     = count_per_task;
+                    exec_args.dt  = dt;
                     exec_args.op            = UCC_OP_SUM; //tTODO from args
                     int n_received_vecs = task->send_posted - p->iteration * (radix - 1);
-                    exec_args.src3_size     = n_received_vecs + 1;
-                    exec_args.src3[0] = PTR_OFFSET(local_data, offset * dt_size);
+                    exec_args.size     = n_received_vecs + 1;
+                    exec_args.bufs[1] = PTR_OFFSET(local_data, offset * dt_size);
                     int j;
                     for (j=0; j < n_received_vecs; j++) {
-                        exec_args.src3[j+1] = PTR_OFFSET(rbuf, (local_seg_count * j + offset) * dt_size);
+                        exec_args.bufs[j+2] = PTR_OFFSET(rbuf, (local_seg_count * j + offset) * dt_size);
                     }
 #ifdef NVTX_ENABLED
                     task->reduce_scatter_kn.ids[t] = nvtxRangeStartA("eee_reduce");
