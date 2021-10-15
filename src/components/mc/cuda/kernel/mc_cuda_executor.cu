@@ -34,6 +34,56 @@ __device__ inline void add_float4(float4 &x, const float4 &y)
     x.w += y.w;
 }
 
+__device__ void executor_reduce_float_multi4(float **s, float *d,
+                                             size_t count, uint32_t size)
+{
+    float4 **s4 = (float4**)s;
+    float4  *d4 = (float4*)d;
+    const int idx  = threadIdx.x;
+    const int step = blockDim.x;
+    const int n = count / 4;
+    const int num_iter = n / step + ((idx < n % step) ? 1 : 0);
+
+    for(int i = 0; i < num_iter; i++) {
+        int  k = i * step + idx;
+        float4 temp[2];
+        add_float4(temp[0], s4[0][k], s4[1][k]);
+        add_float4(temp[1], s4[2][k], s4[3][k]);
+        add_float4(d4[k], temp[0], temp[1]);
+    }
+    // if (idx < count % sizeof(float4)) {
+    //     d[count - idx - 1] = s1[count - idx - 1] + s2[count - idx - 1];
+    // }
+
+}
+
+__device__ void executor_reduce_float_multi8(float **s, float *d,
+                                             size_t count, uint32_t size)
+{
+    float4 **s4 = (float4**)s;
+    float4  *d4 = (float4*)d;
+    const int idx  = threadIdx.x;
+    const int step = blockDim.x;
+    const int n = count / 4;
+    const int num_iter = n / step + ((idx < n % step) ? 1 : 0);
+
+    for(int i = 0; i < num_iter; i++) {
+        int  k = i * step + idx;
+        float4 temp[4];
+        add_float4(temp[0], s4[0][k], s4[1][k]);
+        add_float4(temp[1], s4[2][k], s4[3][k]);
+        add_float4(temp[2], s4[4][k], s4[5][k]);
+        add_float4(temp[3], s4[6][k], s4[7][k]);
+        add_float4(temp[0], temp[2]);
+        add_float4(temp[1], temp[3]);
+        add_float4(d4[k], temp[0], temp[1]);
+    }
+    // if (idx < count % sizeof(float4)) {
+    //     d[count - idx - 1] = s1[count - idx - 1] + s2[count - idx - 1];
+    // }
+
+}
+
 __device__ void executor_reduce_float_multi(float **s, float *d,
                                             size_t count, uint32_t size)
 {
@@ -127,15 +177,16 @@ __device__ void executor_copy_aligned(T* __restrict__ d, T* __restrict__ s,
     }
 }
 
-__global__ void executor_start(volatile ucc_mc_cuda_executor_t *eee)
+__global__ void executor_start(ucc_mc_cuda_executor_state_t *state,
+                               int *cidx)
 {
-    *eee->dev_cidx  = 0;
-    *eee->dev_state = UCC_MC_CUDA_EXECUTOR_STARTED;
+    *cidx  = 0;
+    *state = UCC_MC_CUDA_EXECUTOR_STARTED;
 }
 
-__global__ void executor_shutdown_ack(volatile ucc_mc_cuda_executor_t *eee)
+__global__ void executor_shutdown_ack(ucc_mc_cuda_executor_state_t *state)
 {
-    *eee->dev_state = UCC_MC_CUDA_EXECUTOR_SHUTDOWN_ACK;
+    *state = UCC_MC_CUDA_EXECUTOR_SHUTDOWN_ACK;
 }
 
 __global__ void executor_kernel(volatile ucc_mc_cuda_executor_t *eee,
@@ -208,11 +259,30 @@ __global__ void executor_kernel(volatile ucc_mc_cuda_executor_t *eee,
                 }
                 break;
             case UCC_MC_EE_EXECUTOR_TASK_TYPE_REDUCE_MULTI:
-                executor_reduce_float_multi((float**)&args.bufs[1],
-                                            (float*)args.bufs[0],
-                                            args.count,
-                                            args.size);
+                switch (args.size)
+                {
+                case 4:
+                    executor_reduce_float_multi4((float**)&args.bufs[1],
+                                                (float*)args.bufs[0],
+                                                args.count,
+                                                args.size);
+                    break;
+                case 8:
+                    executor_reduce_float_multi8((float**)&args.bufs[1],
+                                                (float*)args.bufs[0],
+                                                args.count,
+                                                args.size);
+                    break;
+
+                default:
+                    executor_reduce_float_multi((float**)&args.bufs[1],
+                                                (float*)args.bufs[0],
+                                                args.count,
+                                                args.size);
+                    break;
+                }
                 break;
+            default: __builtin_unreachable();
         }
         __syncthreads();
         __threadfence_system();
@@ -234,9 +304,9 @@ ucc_status_t ucc_mc_cuda_start_executor(ucc_mc_cuda_executor_t *eee)
     int          nt     = MC_CUDA_CONFIG->exec_num_threads;
     int          q_size = MC_CUDA_CONFIG->exec_max_tasks;
 
-    executor_start<<<1, 1, 0, stream>>>(eee);
+    executor_start<<<1, 1, 0, stream>>>(eee->dev_state, eee->dev_cidx);
     executor_kernel<<<nb, nt, 0, stream>>>(eee, q_size);
-    executor_shutdown_ack<<<1, 1, 0, stream>>>(eee);
+    executor_shutdown_ack<<<1, 1, 0, stream>>>(eee->dev_state);
     CUDACHECK(cudaGetLastError());
 
     return UCC_OK;
