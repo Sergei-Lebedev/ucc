@@ -20,6 +20,7 @@ sources =                                  \
 	reduce_scatter/reduce_scatter_ring.c   \
 	allgather/allgather_ring.c             \
 	allgather/allgather_linear.c           \
+	allgather/allgather_linear_multi.c     \
 	alltoallv/alltoallv.c
 
 module_LTLIBRARIES = libucc_tl_cuda_ipc.la

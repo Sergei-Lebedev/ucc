@@ -23,6 +23,7 @@ enum {
 enum {
     UCC_TL_CUDA_IPC_ALLGATHER_ALG_LINEAR,
     UCC_TL_CUDA_IPC_ALLGATHER_ALG_RING,
+    UCC_TL_CUDA_IPC_ALLGATHER_ALG_LINEAR_MULTI,
     UCC_TL_CUDA_IPC_ALLGATHER_ALG_LAST
 };
 
@@ -75,6 +76,12 @@ typedef struct ucc_tl_cuda_ipc_task {
             uint32_t                coll_id;
             ucc_ee_executor_task_t *exec_task[MAX_STATIC_SIZE][N_LINEAR_TASKS];
         } allgather_linear;
+        struct {
+            void                   **peer_map_addr;
+            uint32_t                coll_id;
+            int                     sync_done;
+            ucc_ee_executor_task_t *exec_task[((MAX_STATIC_SIZE) * (N_LINEAR_TASKS))];
+        } allgather_linear_multi;
     };
 } ucc_tl_cuda_ipc_task_t;
 
@@ -167,6 +174,10 @@ ucc_status_t ucc_tl_cuda_ipc_allgather_ring_init(ucc_base_coll_args_t *coll_args
 ucc_status_t ucc_tl_cuda_ipc_allgather_linear_init(ucc_base_coll_args_t *coll_args,
                                                    ucc_base_team_t *tl_team,
                                                    ucc_coll_task_t **task_p);
+
+ucc_status_t ucc_tl_cuda_ipc_allgather_linear_multi_init(ucc_base_coll_args_t *coll_args,
+                                                         ucc_base_team_t *tl_team,
+                                                         ucc_coll_task_t **task_p);
 
 ucc_status_t ucc_tl_cuda_ipc_alg_id_to_init(int alg_id, const char *alg_id_str,
                                             ucc_coll_type_t   coll_type,

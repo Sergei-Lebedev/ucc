@@ -166,14 +166,42 @@ __device__ void executor_copy_aligned(T* __restrict__ d, T* __restrict__ s,
     const int num_iter = n / step + ((idx < n % step) ? 1 : 0);
     char1 *s1 = (char1*)s;
     char1 *d1 = (char1*)d;
+    int k = idx;
 
-#pragma unroll 4
+#pragma unroll 2
     for(int i = 0; i < num_iter; i++) {
-        d[i * step + idx] = s[i * step + idx];
+        d[k] = s[k];
+        k += step;
     }
 
     if (idx < count % sizeof(T)) {
         d1[count - idx - 1] = s1[count - idx - 1];
+    }
+}
+
+template <typename T>
+__device__ void executor_broadcast_aligned(T** __restrict__ d, T* __restrict__ s,
+                                           size_t count, uint32_t size)
+{
+    size_t idx = threadIdx.x;
+    const size_t step  = blockDim.x;
+    const int n = count / sizeof(T);
+    const int num_iter = n / step + ((idx < n % step) ? 1 : 0);
+    char1 *s1 = (char1*)s;
+    char1 **d1 = (char1**)d;
+    int k = idx;
+
+    for (int i = 0; i < num_iter; i++) {
+        for (int j = 0; j < size; j++) {
+            d[j][k] = s[k];
+        }
+        k += step;
+    }
+
+    if (idx < count % sizeof(T)) {
+        for (int j = 0; j < size; j++) {
+            d1[j][count - idx - 1] = s1[count - idx - 1];
+        }
     }
 }
 
@@ -282,7 +310,12 @@ __global__ void executor_kernel(volatile ucc_mc_cuda_executor_t *eee,
                     break;
                 }
                 break;
-            default: __builtin_unreachable();
+            case UCC_MC_EE_EXECUTOR_TASK_TYPE_BROADCAST:
+                executor_broadcast_aligned<uint4>((uint4**)&args.bufs[1],
+                                                  (uint4*)args.bufs[0],
+                                                  args.count,
+                                                  args.size);
+                break;
         }
         __syncthreads();
         __threadfence_system();

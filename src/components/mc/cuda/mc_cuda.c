@@ -916,7 +916,7 @@ ucc_status_t ucc_cuda_executor_task_post(ucc_ee_executor_task_args_t *task_args,
     int                     max_tasks = MC_CUDA_CONFIG->exec_max_tasks;
     ucc_ee_executor_task_t *ee_task;
 
-//    nvtxMarkA("post task");
+    // nvtxMarkA("post task");
     ee_task = &(eee->tasks[eee->pidx % max_tasks]);
     ee_task->eee = executor;
     ee_task->status = UCC_OPERATION_INITIALIZED;

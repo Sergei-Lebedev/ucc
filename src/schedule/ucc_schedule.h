@@ -12,7 +12,7 @@
 
 #define NVTX_ENABLED
 
-#ifdef NVTX_ENABLED    
+#ifdef NVTX_ENABLED
 #include <nvToolsExt.h>
 #endif
 
@@ -79,9 +79,9 @@ typedef struct ucc_coll_task {
     uint8_t n_deps;
     uint8_t n_deps_satisfied;
     uint8_t n_deps_base;
-#ifdef NVTX_ENABLED    
+#ifdef NVTX_ENABLED
     nvtxRangeId_t     id;
-#endif    
+#endif
     ptrdiff_t frag_offset;
 } ucc_coll_task_t;
 

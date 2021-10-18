@@ -50,6 +50,9 @@ ucc_status_t ucc_tl_cuda_ipc_alg_id_to_init(int alg_id, const char *alg_id_str,
         case UCC_TL_CUDA_IPC_ALLGATHER_ALG_RING:
             *init = ucc_tl_cuda_ipc_allgather_ring_init;
             break;
+        case UCC_TL_CUDA_IPC_ALLGATHER_ALG_LINEAR_MULTI:
+            *init = ucc_tl_cuda_ipc_allgather_linear_multi_init;
+            break;
         default:
             status = UCC_ERR_INVALID_PARAM;
             break;

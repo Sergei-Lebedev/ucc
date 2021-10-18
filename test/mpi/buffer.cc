@@ -114,10 +114,6 @@ ucc_status_t compare_buffers(void *_rst, void *expected, size_t count,
         MPI_Abort(MPI_COMM_WORLD, -1);
     }
 
-    int debug = 0;
-    while(debug) {
-        sleep(3);
-    }
     if (dt == UCC_DT_FLOAT32) {
         status = compare_buffers_fp<float>((float*)rst, (float*)expected, count);
     } else if (dt == UCC_DT_FLOAT64) {
