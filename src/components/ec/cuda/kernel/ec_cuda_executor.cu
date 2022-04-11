@@ -203,9 +203,36 @@ __global__ void executor_kernel(volatile ucc_ec_cuda_executor_t *eee,
     }
 }
 
+#define COPY_DT float2
+__global__ void kernel_copy(COPY_DT* d, COPY_DT* s, size_t count)
+{
+    size_t idx = threadIdx.x + blockIdx.x * gridDim.x;
+    const size_t step  = blockDim.x * gridDim.x;
+    const int n = count / sizeof(COPY_DT);
+    const int num_iter = n / step + ((idx < n % step) ? 1 : 0);
+    char1 *s1 = (char1*)s;
+    char1 *d1 = (char1*)d;
+
+    for(int i = 0; i < num_iter; i++) {
+        d[i * step + idx] = s[i * step + idx];
+    }
+
+    if (idx < count % sizeof(COPY_DT)) {
+        d1[count - idx - 1] = s1[count - idx - 1];
+    }
+}
+
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+
+ucc_status_t ucc_copy_kernel(void *dst, void *src, size_t count,
+                             cudaStream_t stream)
+{
+    kernel_copy<<<16, 512, 0, stream>>>((COPY_DT*)dst, (COPY_DT*)src, count);
+    return UCC_OK;
+}
 
 ucc_status_t ucc_ec_cuda_persistent_kernel_start(ucc_ec_cuda_executor_t *eee)
 {

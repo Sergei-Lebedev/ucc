@@ -7,6 +7,9 @@
 #include "ec_cuda_executor.h"
 #include "components/mc/ucc_mc.h"
 
+ucc_status_t ucc_copy_kernel(void *dst, void *src, size_t count,
+                             cudaStream_t stream);
+
 ucc_status_t ucc_cuda_executor_interruptible_get_stream(cudaStream_t *stream)
 {
     static int last_used = 0;
@@ -68,10 +71,13 @@ ucc_cuda_executor_interruptible_task_post(ucc_ee_executor_t *executor,
     memcpy(&ee_task->super.args, task_args, sizeof(ucc_ee_executor_task_args_t));
     switch (task_args->task_type) {
     case UCC_EE_EXECUTOR_TASK_TYPE_COPY:
+        // status = ucc_copy_kernel(task_args->bufs[0], task_args->bufs[1],
+        //                         task_args->count, stream);
+
         status = CUDA_FUNC(cudaMemcpyAsync(task_args->bufs[0],
-                                           task_args->bufs[1],
-                                           task_args->count, cudaMemcpyDefault,
-                                           stream));
+                                        task_args->bufs[1],
+                                        task_args->count, cudaMemcpyDefault,
+                                        stream));
         if (ucc_unlikely(status != UCC_OK)) {
             ec_error(&ucc_ec_cuda.super, "failed to start memcpy op");
             goto free_task;

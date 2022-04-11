@@ -200,6 +200,107 @@ free_ring:
 }
 
 static ucc_status_t
+ucc_tl_cuda_team_topo_init_proxies(const ucc_tl_cuda_team_t *team,
+                                   ucc_tl_cuda_team_topo_t *topo)
+{
+    ucc_rank_t size        = UCC_TL_TEAM_SIZE(team);
+    ucc_rank_t num_proxies = 0;
+    ucc_rank_t i, j ,p, k, proxy;
+    float *data;
+    float score, min_score;
+    ucc_status_t status;
+
+    for (i = 0; i < size * size; i++) {
+        if (topo->matrix[i] == 0) {
+            num_proxies++;
+        }
+    }
+
+    topo->num_proxies = num_proxies;
+    if (num_proxies == 0) {
+        return UCC_OK;
+    }
+
+    topo->proxies = (ucc_tl_cuda_proxy_t*)ucc_malloc(
+            num_proxies * sizeof(ucc_tl_cuda_proxy_t), "cuda_topo_proxies");
+    if (!topo->proxies) {
+        tl_error(UCC_TL_TEAM_LIB(team), "failed to alloc cuda topo proxies");
+        return UCC_ERR_NO_MEMORY;
+    }
+
+    data = (float*)ucc_malloc(size * size * sizeof(float),
+                              "cuda topo proxies data");
+    if (!data) {
+        tl_error(UCC_TL_TEAM_LIB(team), "failed to alloc cuda topo work array");
+        status = UCC_ERR_NO_MEMORY;
+        goto free_proxy;
+    }
+
+    for (i = 0; i < size; i++) {
+        for (j = 0; j < size; j++) {
+            if (ucc_tl_cuda_team_topo_is_direct(&team->super, topo, i, j)) {
+                data[i * size + j] = 1.0;
+            } else {
+                data[i * size + j] = 0.0;
+            }
+        }
+    }
+
+    p = 0;
+    for (i = 0; i < size; i++) {
+        for (j = 0; j < size; j++) {
+            if (ucc_tl_cuda_team_topo_is_direct(&team->super, topo, i, j)) {
+                continue;
+            }
+            proxy = UCC_RANK_INVALID;
+            min_score = (float)(UCC_RANK_MAX);
+            for (k = 0; k < size; k++) {
+                if (ucc_tl_cuda_team_topo_is_direct(&team->super, topo, i, k) &&
+                    ucc_tl_cuda_team_topo_is_direct(&team->super, topo, k, j)) {
+                    score = ucc_max((data[i * size + k] + 1.0) /
+                                    topo->matrix[i * size + k],
+                                    (data[k * size + j] + 1.0) /
+                                    topo->matrix[k * size + j]);
+                    if (score >= min_score) {
+                        continue;
+                    }
+                    proxy = k;
+                    min_score = score;
+                }
+            }
+            if (proxy == UCC_RANK_INVALID) {
+                tl_info(UCC_TL_TEAM_LIB(team), "no proxy found between "
+                        "dev %d rank %d and dev %d rank %d, "
+                        "cuda topology is not supported",
+                        team->ids[i].device, i, team->ids[j].device, j);
+                status = UCC_ERR_NOT_SUPPORTED;
+                goto free_data;
+            }
+            topo->proxies[p].src   = i;
+            topo->proxies[p].dst   = j;
+            topo->proxies[p].proxy = proxy;
+            data[i * size + proxy] += 1.0;
+            data[proxy * size + j] += 1.0;
+            p++;
+        }
+    }
+
+    ucc_free(data);
+    return UCC_OK;
+free_data:
+    ucc_free(data);
+free_proxy:
+    ucc_free(topo->proxies);
+    return status;
+}
+
+#define SET_PROXY(n, i, j, k) { \
+  topo->proxies[n].src = i;      \
+  topo->proxies[n].dst = j;       \
+  topo->proxies[n].proxy = k;     \
+}
+
+static ucc_status_t
 ucc_tl_cuda_team_topo_init_proxy(const ucc_tl_cuda_team_t *team,
                                  ucc_tl_cuda_team_topo_t *topo)
 {
@@ -224,6 +325,191 @@ ucc_tl_cuda_team_topo_init_proxy(const ucc_tl_cuda_team_t *team,
         tl_error(UCC_TL_TEAM_LIB(team), "failed to alloc cuda topo proxy");
         return UCC_ERR_NO_MEMORY;
     }
+
+/* current */
+#if 0
+    SET_PROXY(0, 0, 5, 1);
+    SET_PROXY(1, 0, 6, 2);
+    SET_PROXY(2, 0, 7, 3);
+
+    SET_PROXY(3, 1, 4, 0);
+    SET_PROXY(4, 1, 6, 2);
+    SET_PROXY(5, 1, 7, 3);
+
+    SET_PROXY(6, 2, 4, 0);
+    SET_PROXY(7, 2, 5, 1);
+    SET_PROXY(8, 2, 7, 3);
+
+    SET_PROXY(9,  3, 4, 0);
+    SET_PROXY(10, 3, 5, 1);
+    SET_PROXY(11, 3, 6, 2);
+
+    SET_PROXY(12, 4, 1, 0);
+    SET_PROXY(13, 4, 2, 0);
+    SET_PROXY(14, 4, 3, 0);
+
+    SET_PROXY(15, 5, 0, 1);
+    SET_PROXY(16, 5, 2, 1);
+    SET_PROXY(17, 5, 3, 1);
+
+    SET_PROXY(18, 6, 0, 2);
+    SET_PROXY(19, 6, 1, 2);
+    SET_PROXY(20, 6, 3, 2);
+
+    SET_PROXY(21, 7, 0, 3);
+    SET_PROXY(22, 7, 1, 3);
+    SET_PROXY(23, 7, 2, 3);
+#endif
+/* new */
+
+    // SET_PROXY(0, 0, 5, 1);
+    // SET_PROXY(1, 0, 6, 4);
+    // SET_PROXY(2, 0, 7, 4);
+
+    // SET_PROXY(3, 1, 4, 0);
+    // SET_PROXY(4, 1, 6, 5);
+    // SET_PROXY(5, 1, 7, 5);
+
+    // SET_PROXY(6, 2, 4, 0);
+    // SET_PROXY(7, 2, 5, 1);
+    // SET_PROXY(8, 2, 7, 3);
+
+    // SET_PROXY(9,  3, 4, 0);
+    // SET_PROXY(10, 3, 5, 1);
+    // SET_PROXY(11, 3, 6, 2);
+
+    // SET_PROXY(12, 4, 1, 0);
+    // SET_PROXY(13, 4, 2, 0);
+    // SET_PROXY(14, 4, 3, 0);
+
+    // SET_PROXY(15, 5, 0, 1);
+    // SET_PROXY(16, 5, 2, 1);
+    // SET_PROXY(17, 5, 3, 1);
+
+    // SET_PROXY(18, 6, 0, 4);
+    // SET_PROXY(19, 6, 1, 5);
+    // SET_PROXY(20, 6, 3, 2);
+
+    // SET_PROXY(21, 7, 0, 4);
+    // SET_PROXY(22, 7, 1, 5);
+    // SET_PROXY(23, 7, 2, 3);
+
+/* nccl */
+#if 0
+    SET_PROXY(0, 0, 5, 1);
+    SET_PROXY(1, 0, 6, 4);
+    SET_PROXY(2, 0, 7, 4);
+
+    SET_PROXY(3, 1, 4, 0);
+    SET_PROXY(4, 1, 6, 5);
+    SET_PROXY(5, 1, 7, 3);
+
+    SET_PROXY(6, 2, 4, 0);
+    SET_PROXY(7, 2, 5, 1);
+    SET_PROXY(8, 2, 7, 6);
+
+    SET_PROXY(9,  3, 4, 0);
+    SET_PROXY(10, 3, 5, 1);
+    SET_PROXY(11, 3, 6, 7);
+
+    SET_PROXY(12, 4, 1, 5);
+    SET_PROXY(13, 4, 2, 6);
+    SET_PROXY(14, 4, 3, 0);
+
+    SET_PROXY(15, 5, 0, 4);
+    SET_PROXY(16, 5, 2, 1);
+    SET_PROXY(17, 5, 3, 1);
+
+    SET_PROXY(18, 6, 0, 4);
+    SET_PROXY(19, 6, 1, 5);
+    SET_PROXY(20, 6, 3, 2);
+
+    SET_PROXY(21, 7, 0, 4);
+    SET_PROXY(22, 7, 1, 5);
+    SET_PROXY(23, 7, 2, 3);
+#endif
+
+/* exp */
+// SET_PROXY(0, 0, 5, 4);
+// SET_PROXY(1, 0, 6, 4);
+// SET_PROXY(2, 0, 7, 3);
+// SET_PROXY(3, 1, 4, 5);
+// SET_PROXY(4, 1, 6, 2);
+// SET_PROXY(5, 1, 7, 5);
+// SET_PROXY(6, 2, 4, 0);
+// SET_PROXY(7, 2, 5, 1);
+// SET_PROXY(8, 2, 7, 3);
+// SET_PROXY(9, 3, 4, 0);
+// SET_PROXY(10, 3, 5, 1);
+// SET_PROXY(11, 3, 6, 2);
+// SET_PROXY(12, 4, 1, 0);
+// SET_PROXY(13, 4, 2, 0);
+// SET_PROXY(14, 4, 3, 7);
+// SET_PROXY(15, 5, 0, 1);
+// SET_PROXY(16, 5, 2, 6);
+// SET_PROXY(17, 5, 3, 1);
+// SET_PROXY(18, 6, 0, 4);
+// SET_PROXY(19, 6, 1, 2);
+// SET_PROXY(20, 6, 3, 7);
+// SET_PROXY(21, 7, 0, 4);
+// SET_PROXY(22, 7, 1, 5);
+// SET_PROXY(23, 7, 2, 3);
+
+//exp2
+// SET_PROXY(0, 0, 5, 4);
+// SET_PROXY(1, 0, 6, 4);
+// SET_PROXY(2, 0, 7, 3);
+// SET_PROXY(3, 1, 4, 5);
+// SET_PROXY(4, 1, 6, 2);
+// SET_PROXY(5, 1, 7, 5);
+// SET_PROXY(6, 2, 4, 6);
+// SET_PROXY(7, 2, 5, 1);
+// SET_PROXY(8, 2, 7, 3);
+// SET_PROXY(9, 3, 4, 0);
+// SET_PROXY(10, 3, 5, 1);
+// SET_PROXY(11, 3, 6, 7);
+// SET_PROXY(12, 4, 1, 5);
+// SET_PROXY(13, 4, 2, 6);
+// SET_PROXY(14, 4, 3, 7);
+// SET_PROXY(15, 5, 0, 4);
+// SET_PROXY(16, 5, 2, 1);
+// SET_PROXY(17, 5, 3, 7);
+// SET_PROXY(18, 6, 0, 4);
+// SET_PROXY(19, 6, 1, 5);
+// SET_PROXY(20, 6, 3, 7);
+// SET_PROXY(21, 7, 0, 4);
+// SET_PROXY(22, 7, 1, 5);
+// SET_PROXY(23, 7, 2, 6);
+
+
+//exp3
+#if 0
+SET_PROXY(0, 0, 5, 1);
+SET_PROXY(1, 0, 6, 2);
+SET_PROXY(2, 0, 7, 4);
+SET_PROXY(3, 1, 4, 0);
+SET_PROXY(4, 1, 6, 5);
+SET_PROXY(5, 1, 7, 3);
+SET_PROXY(6, 2, 4, 0);
+SET_PROXY(7, 2, 5, 1);
+SET_PROXY(8, 2, 7, 3);
+SET_PROXY(9, 3, 4, 0);
+SET_PROXY(10, 3, 5, 1);
+SET_PROXY(11, 3, 6, 2);
+SET_PROXY(12, 4, 1, 5);
+SET_PROXY(13, 4, 2, 6);
+SET_PROXY(14, 4, 3, 0);
+SET_PROXY(15, 5, 0, 4);
+SET_PROXY(16, 5, 2, 1);
+SET_PROXY(17, 5, 3, 7);
+SET_PROXY(18, 6, 0, 4);
+SET_PROXY(19, 6, 1, 5);
+SET_PROXY(20, 6, 3, 2);
+SET_PROXY(21, 7, 0, 4);
+SET_PROXY(22, 7, 1, 5);
+SET_PROXY(23, 7, 2, 3);
+#endif
+    //printf("num proxies %d\n", topo->num_proxies);
 
     p = 0;
     for (i = 0; i < size; i++) {
@@ -255,7 +541,7 @@ ucc_tl_cuda_team_topo_init_proxy(const ucc_tl_cuda_team_t *team,
 
 free_proxy:
    ucc_free(topo->proxies);
-    return status;
+   return status;
 }
 
 static ucc_status_t
@@ -315,7 +601,12 @@ ucc_status_t ucc_tl_cuda_team_topo_create(const ucc_tl_team_t *cuda_team,
         goto free_matrix;
     }
 
-    status = ucc_tl_cuda_team_topo_init_proxy(team, topo);
+    if (0) {
+        status = ucc_tl_cuda_team_topo_init_proxy(team, topo);
+    } else {
+        status = ucc_tl_cuda_team_topo_init_proxies(team, topo);
+
+    }
     if (status != UCC_OK) {
         if (status != UCC_ERR_NOT_SUPPORTED) {
             tl_error(UCC_TL_TEAM_LIB(team), "failed to init cuda topo proxy");
