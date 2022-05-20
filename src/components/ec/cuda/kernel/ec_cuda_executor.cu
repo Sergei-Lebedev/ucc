@@ -247,6 +247,73 @@ __global__ void executor_kernel(volatile ucc_ec_cuda_executor_t *eee,
     }
 }
 
+
+__global__ void kernel_copy(int* __restrict__ d, int* __restrict__ s,
+                            size_t count)
+{
+    size_t start = threadIdx.x + blockIdx.x * blockDim.x;
+    size_t step  = blockDim.x * gridDim.x;
+
+    for (size_t i = start; i < count; i += step) {
+        d[i] = s[i];
+    }
+}
+
+__global__ void kernel_reduce(float *dst, float* src1, float *src2,
+                              size_t count)
+{
+    size_t start = threadIdx.x + blockIdx.x * blockDim.x;
+    size_t step  = blockDim.x * gridDim.x;
+
+    for (size_t i = start; i < count; i += step) {
+        dst[i] = src1[i] + src2[i];
+    }
+}
+
+__global__ void kernel_copy_aligned(void* __restrict__ d,
+                                    void* __restrict__ s,
+                                    size_t count)
+{
+    size_t       idx   = threadIdx.x + blockIdx.x * blockDim.x;
+    const size_t step  = blockDim.x * gridDim.x;
+    const int n = count / sizeof(uint4);
+    const int num_iter = n / step + ((idx < n % step) ? 1 : 0);
+    char1 *s1 = (char1*)s;
+    char1 *d1 = (char1*)d;
+    uint4 *s4 = (uint4*)s;
+    uint4 *d4 = (uint4*)d;
+
+#pragma unroll 4
+    for(int i = 0; i < num_iter; i++) {
+        d4[i * step + idx] = s4[i * step + idx];
+    }
+
+    if (idx < count % sizeof(uint4)) {
+        d1[count - idx - 1] = s1[count - idx - 1];
+    }
+}
+
+__global__ void kernel_reduce_aligned(float *d, const float *s1, const float *s2,
+                                      size_t count)
+{
+    const float4 *s14 = (const float4*)s1;
+    const float4 *s24 = (const float4*)s2;
+    float4       *d4  = (float4*)d;
+    const size_t idx = threadIdx.x + blockIdx.x * blockDim.x;
+    const size_t step = blockDim.x * gridDim.x;
+    const int n = count / 4;
+    const int num_iter = n / step + ((idx < n % step) ? 1 : 0);
+
+    for(int i = 0; i < num_iter; i++) {
+        float4 d  = d4[i * step + idx];
+        add_float4(d, s14[i * step + idx], s24[i * step + idx]);
+        d4[i * step + idx] = d;
+    }
+    if (idx < count % sizeof(float4)) {
+        d[count - idx - 1] = s1[count - idx - 1] + s2[count - idx - 1];
+    }
+}
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -266,6 +333,39 @@ ucc_status_t ucc_ec_cuda_persistent_kernel_start(ucc_ec_cuda_executor_t *eee)
     return UCC_OK;
 }
 
+ucc_status_t ucc_ec_cuda_copy_kernel(void *dst, void *src, size_t size,
+                                     cudaStream_t stream)
+{
+    const int nt = 1024;
+    // const int nb = (size + nt - 1)/nt;;
+    const int nb = 4;
+    // kernel_copy<<<nb, nt, 0, stream>>>((int*)dst, (int*)src, size / sizeof(int));
+    kernel_copy_aligned<<<nb, nt, 0, stream>>>(dst, src, size);
+
+    CUDA_CHECK(cudaGetLastError());
+    return UCC_OK;
+}
+
+ucc_status_t ucc_ec_cuda_reduce_kernel(float *dst, float *src1, float *src2,
+                                       size_t size, cudaStream_t stream)
+{
+
+    const int nt = 1024;
+    int aligned;
+    // const int nb = (size + nt - 1)/nt;;
+    const int nb = 8;
+
+    aligned = !(align_pow2((intptr_t)dst, 16) ||
+                align_pow2((intptr_t)src1, 16) ||
+                align_pow2((intptr_t)src2, 16));
+    if (aligned) {
+        kernel_reduce_aligned<<<nb, nt, 0, stream>>>(dst, src1, src2, size);
+    } else {
+        kernel_reduce<<<nb, nt, 0, stream>>>(dst, src1, src2, size);
+    }
+    CUDA_CHECK(cudaGetLastError());
+    return UCC_OK;
+}
 
 #ifdef __cplusplus
 }

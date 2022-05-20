@@ -43,6 +43,14 @@ unlock:
     return UCC_OK;
 }
 
+ucc_status_t ucc_ec_cuda_copy_kernel(void *dst, void *src, size_t size,
+                                     cudaStream_t stream);
+
+ucc_status_t ucc_ec_cuda_reduce_kernel(float *dst, float *src1, float *src2,
+                                       size_t size, cudaStream_t stream);
+
+#define align_pow2(_n, _p) ((_n) & ((_p) - 1))
+
 ucc_status_t
 ucc_cuda_executor_interruptible_task_post(ucc_ee_executor_t *executor,
                                          const ucc_ee_executor_task_args_t *task_args,
@@ -50,6 +58,13 @@ ucc_cuda_executor_interruptible_task_post(ucc_ee_executor_t *executor,
 {
     ucc_ec_cuda_executor_interruptible_task_t *ee_task;
     ucc_status_t status;
+    cudaStream_t stream;
+    int aligned;
+
+    status = ucc_cuda_executor_interruptible_get_stream(&stream);
+    if (ucc_unlikely(status != UCC_OK)) {
+        return status;
+    }
 
     ee_task = ucc_mpool_get(&ucc_ec_cuda.executor_interruptible_tasks);
     if (ucc_unlikely(!ee_task)) {
@@ -66,10 +81,21 @@ ucc_cuda_executor_interruptible_task_post(ucc_ee_executor_t *executor,
     memcpy(&ee_task->super.args, task_args, sizeof(ucc_ee_executor_task_args_t));
     switch (task_args->task_type) {
     case UCC_EE_EXECUTOR_TASK_TYPE_COPY:
-        status = CUDA_FUNC(cudaMemcpyAsync(task_args->bufs[0],
-                                           task_args->bufs[1],
-                                           task_args->count, cudaMemcpyDefault,
-                                           ucc_ec_cuda.stream));
+
+        aligned = !(align_pow2((intptr_t)task_args->bufs[0], 16) ||
+                    align_pow2((intptr_t)task_args->bufs[1], 16));
+
+        if (aligned) {
+            status = ucc_ec_cuda_copy_kernel(task_args->bufs[0],
+                                             task_args->bufs[1],
+                                             task_args->count, stream);
+
+        } else {
+            status = CUDA_FUNC(cudaMemcpyAsync(task_args->bufs[0],
+                                               task_args->bufs[1],
+                                               task_args->count, cudaMemcpyDefault,
+                                               stream));
+        }
         if (ucc_unlikely(status != UCC_OK)) {
             ec_error(&ucc_ec_cuda.super, "failed to start memcpy op");
             goto free_task;
@@ -78,10 +104,14 @@ ucc_cuda_executor_interruptible_task_post(ucc_ee_executor_t *executor,
         break;
     case UCC_EE_EXECUTOR_TASK_TYPE_REDUCE:
         /* temp workaround to avoid code duplication*/
-        status = ucc_mc_reduce(task_args->bufs[1], task_args->bufs[2],
-                               task_args->bufs[0], task_args->count,
-                               task_args->dt, task_args->op,
-                               UCC_MEMORY_TYPE_CUDA);
+
+        status = ucc_ec_cuda_reduce_kernel(task_args->bufs[0], task_args->bufs[1],
+                                           task_args->bufs[2], task_args->count,
+                                           stream);
+        // status = ucc_mc_reduce(task_args->bufs[1], task_args->bufs[2],
+        //                        task_args->bufs[0], task_args->count,
+        //                        task_args->dt, task_args->op,
+        //                        UCC_MEMORY_TYPE_CUDA);
         if (ucc_unlikely(status != UCC_OK)) {
             ec_error(&ucc_ec_cuda.super, "failed to start reduce op");
             goto free_task;
@@ -119,7 +149,7 @@ ucc_cuda_executor_interruptible_task_post(ucc_ee_executor_t *executor,
         goto free_task;
     }
 
-    status = ucc_ec_cuda_event_post(ucc_ec_cuda.stream, ee_task->event);
+    status = ucc_ec_cuda_event_post(stream, ee_task->event);
     if (ucc_unlikely(status != UCC_OK)) {
         goto free_task;
     }
