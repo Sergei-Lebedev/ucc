@@ -46,6 +46,9 @@ unlock:
 ucc_status_t ucc_ec_cuda_copy_kernel(void *dst, void *src, size_t size,
                                      cudaStream_t stream);
 
+ucc_status_t ucc_ec_cuda_copy_multi_kernel(void *dst1, void *dst2, void *src,
+                                           size_t size, cudaStream_t stream);
+
 ucc_status_t ucc_ec_cuda_reduce_kernel(float *dst, float *src1, float *src2,
                                        size_t size, cudaStream_t stream);
 
@@ -101,6 +104,16 @@ ucc_cuda_executor_interruptible_task_post(ucc_ee_executor_t *executor,
             goto free_task;
         }
 
+        break;
+    case UCC_EE_EXECUTOR_TASK_TYPE_COPY_MULTI:
+        status = ucc_ec_cuda_copy_multi_kernel(task_args->bufs[1],
+                                               task_args->bufs[2],
+                                               task_args->bufs[0],
+                                               task_args->count, stream);
+        if (ucc_unlikely(status != UCC_OK)) {
+            ec_error(&ucc_ec_cuda.super, "failed to start reduce op");
+            goto free_task;
+        }
         break;
     case UCC_EE_EXECUTOR_TASK_TYPE_REDUCE:
         /* temp workaround to avoid code duplication*/

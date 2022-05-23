@@ -150,6 +150,8 @@ ucc_status_t ucc_cpu_executor_task_post(ucc_ee_executor_t *executor,
             goto free_task;
         }
         break;
+    default:
+        return UCC_ERR_NOT_IMPLEMENTED;
     }
     eee_task->status = UCC_OK;
     *task = eee_task;

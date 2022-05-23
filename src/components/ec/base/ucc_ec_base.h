@@ -67,6 +67,7 @@ typedef enum ucc_ee_executor_task_type {
     UCC_EE_EXECUTOR_TASK_TYPE_REDUCE             = UCC_BIT(1),
     UCC_EE_EXECUTOR_TASK_TYPE_REDUCE_MULTI       = UCC_BIT(2),
     UCC_EE_EXECUTOR_TASK_TYPE_REDUCE_MULTI_ALPHA = UCC_BIT(3),
+    UCC_EE_EXECUTOR_TASK_TYPE_COPY_MULTI         = UCC_BIT(4),
 } ucc_ee_executor_task_type_t;
 
 typedef struct ucc_ee_executor_params {

@@ -139,18 +139,18 @@ ucc_status_t ucc_tl_cuda_allgatherv_ring_progress_ring(ucc_tl_cuda_task_t *task,
             }
             ring_scratch_offset = ssize / 2 / task->allgatherv_ring.num_rings;
 
-            peer_block = get_send_block(team, trank, tsize, frag_step, ring_id);
-            ucc_tl_cuda_allgatherv_ring_size_offset(task, peer_block, frag, ring_id,
-                                                    &block_size, &frag_size, &ring_frag_size,
-                                                    &block_offset, &frag_offset, &ring_frag_offset);
-            sbuf1 = PTR_OFFSET(TASK_SCRATCH(task, trank), local_offset + ring_scratch_offset * ring_id);
-            dbuf1 = PTR_OFFSET(rbuf, block_offset + frag_offset + ring_frag_offset);
-            frag_count1 = ring_frag_size;
             peer_block = get_recv_block(team, trank, tsize, frag_step, ring_id);
             ucc_tl_cuda_allgatherv_ring_size_offset(task, peer_block, frag, ring_id,
                                                     &block_size, &frag_size, &ring_frag_size,
                                                     &block_offset, &frag_offset, &ring_frag_offset);
-            sbuf2 = PTR_OFFSET(TASK_SCRATCH(task, recvfrom), local_offset + ring_scratch_offset * ring_id);
+            sbuf1 = PTR_OFFSET(TASK_SCRATCH(task, recvfrom), local_offset + ring_scratch_offset * ring_id);
+            dbuf1 = PTR_OFFSET(rbuf, block_offset + frag_offset + ring_frag_offset);
+            frag_count1 = ring_frag_size;
+            peer_block = get_send_block(team, trank, tsize, frag_step, ring_id);
+            ucc_tl_cuda_allgatherv_ring_size_offset(task, peer_block, frag, ring_id,
+                                                    &block_size, &frag_size, &ring_frag_size,
+                                                    &block_offset, &frag_offset, &ring_frag_offset);
+            sbuf2 = PTR_OFFSET(TASK_SCRATCH(task, trank), local_offset + ring_scratch_offset * ring_id);
             dbuf2 = PTR_OFFSET(rbuf, block_offset + frag_offset + ring_frag_offset);
             frag_count2 = ring_frag_size;
         } else {
@@ -201,25 +201,39 @@ ucc_status_t ucc_tl_cuda_allgatherv_ring_progress_ring(ucc_tl_cuda_task_t *task,
             frag_count1 = ring_frag_size;
             frag_count2 = ring_frag_size;
         }
+        if (sbuf1 == sbuf2) {
+            exec_args.task_type = UCC_EE_EXECUTOR_TASK_TYPE_COPY_MULTI;
+            exec_args.bufs[0] = sbuf1;
+            exec_args.bufs[1] = dbuf1;
+            exec_args.bufs[2] = dbuf2;
+            exec_args.count   = frag_count1;
 
-        exec_args.task_type = UCC_EE_EXECUTOR_TASK_TYPE_COPY;
-        exec_args.bufs[0]   = dbuf1;
-        exec_args.bufs[1]   = sbuf1;
-        exec_args.count     = frag_count1;
-        st = ucc_ee_executor_task_post(exec, &exec_args,
-                                       &task->allgatherv_ring.exec_task[ring_id * 2]);
-        if (ucc_unlikely(st != UCC_OK)) {
-            return st;
-        }
-        if (dbuf2 != NULL) {
-            exec_args.task_type = UCC_EE_EXECUTOR_TASK_TYPE_COPY;
-            exec_args.bufs[0]   = dbuf2;
-            exec_args.bufs[1]   = sbuf2;
-            exec_args.count     = frag_count2;
             st = ucc_ee_executor_task_post(exec, &exec_args,
-                                           &task->allgatherv_ring.exec_task[ring_id * 2 + 1]);
+                                           &task->allgatherv_ring.exec_task[ring_id * 2]);
             if (ucc_unlikely(st != UCC_OK)) {
                 return st;
+            }
+
+        } else {
+            exec_args.task_type = UCC_EE_EXECUTOR_TASK_TYPE_COPY;
+            exec_args.bufs[0]   = dbuf1;
+            exec_args.bufs[1]   = sbuf1;
+            exec_args.count     = frag_count1;
+            st = ucc_ee_executor_task_post(exec, &exec_args,
+                                        &task->allgatherv_ring.exec_task[ring_id * 2]);
+            if (ucc_unlikely(st != UCC_OK)) {
+                return st;
+            }
+            if (dbuf2 != NULL) {
+                exec_args.task_type = UCC_EE_EXECUTOR_TASK_TYPE_COPY;
+                exec_args.bufs[0]   = dbuf2;
+                exec_args.bufs[1]   = sbuf2;
+                exec_args.count     = frag_count2;
+                st = ucc_ee_executor_task_post(exec, &exec_args,
+                                            &task->allgatherv_ring.exec_task[ring_id * 2 + 1]);
+                if (ucc_unlikely(st != UCC_OK)) {
+                    return st;
+                }
             }
         }
     }
