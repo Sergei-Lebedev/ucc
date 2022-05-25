@@ -49,6 +49,11 @@ ucc_status_t ucc_ec_cuda_copy_kernel(void *dst, void *src, size_t size,
 ucc_status_t ucc_ec_cuda_copy_multi_kernel(void *dst1, void *dst2, void *src,
                                            size_t size, cudaStream_t stream);
 
+ucc_status_t ucc_ec_cuda_copy_multi2_kernel(void * const* dst,
+                                            void * const* src,
+                                            const size_t * conuts,
+                                            int size, cudaStream_t stream);
+
 ucc_status_t ucc_ec_cuda_reduce_kernel(float *dst, float *src1, float *src2,
                                        size_t size, cudaStream_t stream);
 
@@ -63,6 +68,7 @@ ucc_cuda_executor_interruptible_task_post(ucc_ee_executor_t *executor,
     ucc_status_t status;
     cudaStream_t stream;
     int aligned;
+    int i;
 
     status = ucc_cuda_executor_interruptible_get_stream(&stream);
     if (ucc_unlikely(status != UCC_OK)) {
@@ -82,6 +88,8 @@ ucc_cuda_executor_interruptible_task_post(ucc_ee_executor_t *executor,
     ee_task->super.status = UCC_INPROGRESS;
     ee_task->super.eee    = executor;
     memcpy(&ee_task->super.args, task_args, sizeof(ucc_ee_executor_task_args_t));
+    ec_debug(&ucc_ec_cuda.super, "executor post");
+
     switch (task_args->task_type) {
     case UCC_EE_EXECUTOR_TASK_TYPE_COPY:
 
@@ -114,6 +122,27 @@ ucc_cuda_executor_interruptible_task_post(ucc_ee_executor_t *executor,
             ec_error(&ucc_ec_cuda.super, "failed to start reduce op");
             goto free_task;
         }
+        break;
+    case UCC_EE_EXECUTOR_TASK_TYPE_COPY_MULTI2:
+        for (i = 0; i < task_args->size; i++) {
+            status = CUDA_FUNC(cudaMemcpyAsync(task_args->dst[i],
+                                    task_args->src[i],
+                                    task_args->counts[i], cudaMemcpyDefault,
+                                    stream));
+            if (ucc_unlikely(status != UCC_OK)) {
+                ec_error(&ucc_ec_cuda.super, "failed to start copymulti2 op");
+                goto free_task;
+            }
+
+        }
+        // status = ucc_ec_cuda_copy_multi2_kernel(task_args->dst, task_args->src,
+        //                                         task_args->counts, task_args->size,
+        //                                         stream);
+        // if (ucc_unlikely(status != UCC_OK)) {
+        //     ec_error(&ucc_ec_cuda.super, "failed to start copymulti2 op");
+        //     goto free_task;
+        // }
+
         break;
     case UCC_EE_EXECUTOR_TASK_TYPE_REDUCE:
         /* temp workaround to avoid code duplication*/
@@ -157,7 +186,8 @@ ucc_cuda_executor_interruptible_task_post(ucc_ee_executor_t *executor,
         }
         break;
     default:
-        ec_error(&ucc_ec_cuda.super, "executor operation is not supported");
+        ec_error(&ucc_ec_cuda.super, "executor operation %d is not supported",
+                 task_args->task_type);
         status = UCC_ERR_INVALID_PARAM;
         goto free_task;
     }

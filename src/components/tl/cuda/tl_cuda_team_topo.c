@@ -139,23 +139,23 @@ ucc_tl_cuda_team_topo_init_rings(const ucc_tl_cuda_team_t *team,
     // ucc_tl_cuda_team_topo_add_ring(team, topo, &ring, 0, 1);
 
     //NV2 backward
-    // ring.ring[0] = 0; ring.ring[1] = 4; ring.ring[2] = 7; ring.ring[3] = 6;
-    // ring.ring[4] = 5; ring.ring[5] = 1; ring.ring[6] = 2; ring.ring[7] = 3;
-    // ucc_tl_cuda_team_topo_add_ring(team, topo, &ring, 0, 1);
+    ring.ring[0] = 0; ring.ring[1] = 4; ring.ring[2] = 7; ring.ring[3] = 6;
+    ring.ring[4] = 5; ring.ring[5] = 1; ring.ring[6] = 2; ring.ring[7] = 3;
+    ucc_tl_cuda_team_topo_add_ring(team, topo, &ring, 0, 1);
 
-    // ring.ring[0] = 0; ring.ring[1] = 4; ring.ring[2] = 7; ring.ring[3] = 6;
-    // ring.ring[4] = 5; ring.ring[5] = 1; ring.ring[6] = 2; ring.ring[7] = 3;
-    // ucc_tl_cuda_team_topo_add_ring(team, topo, &ring, 0, 1);
+    ring.ring[0] = 0; ring.ring[1] = 4; ring.ring[2] = 7; ring.ring[3] = 6;
+    ring.ring[4] = 5; ring.ring[5] = 1; ring.ring[6] = 2; ring.ring[7] = 3;
+    ucc_tl_cuda_team_topo_add_ring(team, topo, &ring, 0, 1);
 
     //NV1 forward
-    // ring.ring[0] = 0; ring.ring[1] = 1; ring.ring[2] = 3; ring.ring[3] = 7;
-    // ring.ring[4] = 5; ring.ring[5] = 4; ring.ring[6] = 6; ring.ring[7] = 2;
-    // ucc_tl_cuda_team_topo_add_ring(team, topo, &ring, 0, 2);
+    ring.ring[0] = 0; ring.ring[1] = 1; ring.ring[2] = 3; ring.ring[3] = 7;
+    ring.ring[4] = 5; ring.ring[5] = 4; ring.ring[6] = 6; ring.ring[7] = 2;
+    ucc_tl_cuda_team_topo_add_ring(team, topo, &ring, 0, 1);
 
     //NV1 backward
-    // ring.ring[0] = 0; ring.ring[1] = 2; ring.ring[2] = 6; ring.ring[3] = 4;
-    // ring.ring[4] = 5; ring.ring[5] = 7; ring.ring[6] = 3; ring.ring[7] = 1;
-    // ucc_tl_cuda_team_topo_add_ring(team, topo, &ring, 0, 2);
+    ring.ring[0] = 0; ring.ring[1] = 2; ring.ring[2] = 6; ring.ring[3] = 4;
+    ring.ring[4] = 5; ring.ring[5] = 7; ring.ring[6] = 3; ring.ring[7] = 1;
+    ucc_tl_cuda_team_topo_add_ring(team, topo, &ring, 0, 1);
 
     ucc_free(ring.ring);
     return UCC_OK;

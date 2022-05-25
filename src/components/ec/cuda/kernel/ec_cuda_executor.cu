@@ -273,6 +273,136 @@ __global__ void kernel_copy_multi(char* __restrict__ d1,
     }
 }
 
+__global__ void kernel_copy_multi22(char* dst1, char* dst2,
+                                    char* src1, char* src2,
+                                    size_t cnt1, size_t cnt2)
+{
+    size_t start = threadIdx.x + blockIdx.x * blockDim.x;
+    size_t step  = blockDim.x * gridDim.x;
+    size_t min_cnt = ucc_min(cnt1, cnt2);
+    size_t i;
+
+    for (i = start; i < min_cnt; i += step) {
+        dst1[i] = src1[i];
+        dst2[i] = src2[i];
+    }
+
+    for (size_t j = i; j < cnt1; j += step) {
+        dst1[j] = src1[j];
+    }
+
+    for (size_t j = i; j < cnt2; j += step) {
+        dst2[j] = src2[j];
+    }
+
+}
+
+__global__ void kernel_copy_multi26(char* dst1, char* dst2, char* dst3, char* dst4, char* dst5, char* dst6,
+                                    char* src1, char* src2, char* src3, char* src4, char* src5, char* src6,
+                                    size_t cnt)
+{
+    size_t start = threadIdx.x + blockIdx.x * blockDim.x;
+    size_t step  = blockDim.x * gridDim.x;
+    size_t i;
+
+    for (i = start; i < cnt; i += step) {
+        dst1[i] = src1[i];
+        dst2[i] = src2[i];
+        dst3[i] = src3[i];
+        dst4[i] = src4[i];
+        dst5[i] = src5[i];
+        dst6[i] = src6[i];
+    }
+}
+
+__global__ void kernel_copy_multi22_aligned(void* dst1, void* dst2,
+                                            void* src1, void* src2,
+                                            size_t cnt1, size_t cnt2)
+{
+    size_t       idx   = threadIdx.x + blockIdx.x * blockDim.x;
+    const size_t step  = blockDim.x * gridDim.x;
+    size_t count = cnt1;
+    const int n = count / sizeof(uint4);
+    const int num_iter = n / step + ((idx < n % step) ? 1 : 0);
+    char1 *s11 = (char1*)src1;
+    char1 *s12 = (char1*)src2;
+    char1 *d11 = (char1*)dst1;
+    char1 *d12 = (char1*)dst2;
+    uint4 *s41 = (uint4*)src1;
+    uint4 *d41 = (uint4*)dst1;
+    uint4 *s42 = (uint4*)src2;
+    uint4 *d42 = (uint4*)dst2;
+
+#pragma unroll 4
+    for(int i = 0; i < num_iter; i++) {
+        d41[i * step + idx] = s41[i * step + idx];
+        d42[i * step + idx] = s42[i * step + idx];
+    }
+
+    if (idx < count % sizeof(uint4)) {
+        d11[count - idx - 1] = s11[count - idx - 1];
+        d12[count - idx - 1] = s12[count - idx - 1];
+    }
+}
+
+__global__ void kernel_copy_multi26_aligned(void* dst1, void* dst2, void* dst3, void* dst4, void* dst5, void* dst6,
+                                            void* src1, void* src2, void* src3, void* src4, void* src5, void* src6,
+                                            size_t count)
+{
+    size_t       idx   = threadIdx.x + blockIdx.x * blockDim.x;
+    const size_t step  = blockDim.x * gridDim.x;
+    const int n = count / sizeof(uint4);
+    const int num_iter = n / step + ((idx < n % step) ? 1 : 0);
+    char1 *s11 = (char1*)src1;
+    char1 *s12 = (char1*)src2;
+    char1 *s13 = (char1*)src3;
+    char1 *s14 = (char1*)src4;
+    char1 *s15 = (char1*)src5;
+    char1 *s16 = (char1*)src6;
+
+    char1 *d11 = (char1*)dst1;
+    char1 *d12 = (char1*)dst2;
+    char1 *d13 = (char1*)dst3;
+    char1 *d14 = (char1*)dst4;
+    char1 *d15 = (char1*)dst5;
+    char1 *d16 = (char1*)dst6;
+
+
+    uint4 *s41 = (uint4*)src1;
+    uint4 *s42 = (uint4*)src2;
+    uint4 *s43 = (uint4*)src3;
+    uint4 *s44 = (uint4*)src4;
+    uint4 *s45 = (uint4*)src5;
+    uint4 *s46 = (uint4*)src6;
+
+
+    uint4 *d41 = (uint4*)dst1;
+    uint4 *d42 = (uint4*)dst2;
+    uint4 *d43 = (uint4*)dst3;
+    uint4 *d44 = (uint4*)dst4;
+    uint4 *d45 = (uint4*)dst5;
+    uint4 *d46 = (uint4*)dst6;
+
+#pragma unroll 4
+    for(int i = 0; i < num_iter; i++) {
+        d41[i * step + idx] = s41[i * step + idx];
+        d42[i * step + idx] = s42[i * step + idx];
+        d43[i * step + idx] = s43[i * step + idx];
+        d44[i * step + idx] = s44[i * step + idx];
+        d45[i * step + idx] = s45[i * step + idx];
+        d46[i * step + idx] = s46[i * step + idx];
+    }
+
+    if (idx < count % sizeof(uint4)) {
+        d11[count - idx - 1] = s11[count - idx - 1];
+        d12[count - idx - 1] = s12[count - idx - 1];
+        d13[count - idx - 1] = s13[count - idx - 1];
+        d14[count - idx - 1] = s14[count - idx - 1];
+        d15[count - idx - 1] = s15[count - idx - 1];
+        d16[count - idx - 1] = s16[count - idx - 1];
+    }
+}
+
 __global__ void kernel_copy_aligned(void* __restrict__ d,
                                     void* __restrict__ s,
                                     size_t count)
@@ -407,6 +537,129 @@ ucc_status_t ucc_ec_cuda_copy_multi_kernel(void *dst1, void *dst2, void *src,
     CUDA_CHECK(cudaGetLastError());
     return UCC_OK;
 }
+
+struct copy_info_t {
+    void   *src[6];
+    void   *dst[6];
+    size_t  cnt[6];
+    int     size;
+};
+
+__global__ void kernel_copy_multi2(copy_info_t info)
+{
+    int blocks_per_buf = gridDim.x / info.size;
+    int buf_id = blockIdx.x / blocks_per_buf;
+    char1 *src = (char1*)info.src[buf_id];
+    char1 *dst = (char1*)info.dst[buf_id];
+    size_t cnt = info.cnt[buf_id];
+
+    size_t start = threadIdx.x + (blockIdx.x % blocks_per_buf) * blockDim.x;
+    // size_t start = threadIdx.x + blockIdx.x * blockDim.x;
+    size_t step  = blockDim.x * blocks_per_buf;
+    // size_t min_cnt = ucc_min(cnt1, cnt2);
+    // size_t i;
+
+    for (size_t i = start; i < cnt; i += step) {
+        dst[i] = src[i];
+    }
+}
+
+__global__ void kernel_copy_multi2_aligned(copy_info_t info)
+{
+    int blocks_per_buf = gridDim.x / info.size;
+    int buf_id = blockIdx.x / blocks_per_buf;
+    char1 *src = (char1*)info.src[buf_id];
+    char1 *dst = (char1*)info.dst[buf_id];
+    size_t cnt = info.cnt[buf_id];
+
+    size_t       idx   = threadIdx.x + (blockIdx.x % blocks_per_buf) * blockDim.x;
+    const size_t step  = blockDim.x * blocks_per_buf;
+
+    const int n = cnt / sizeof(uint4);
+    const int num_iter = n / step + ((idx < n % step) ? 1 : 0);
+    char1 *s1 = (char1*)src;
+    char1 *d1 = (char1*)dst;
+    uint4 *s4 = (uint4*)src;
+    uint4 *d4 = (uint4*)dst;
+
+#pragma unroll 4
+    for(int i = 0; i < num_iter; i++) {
+        d4[i * step + idx] = s4[i * step + idx];
+    }
+
+    if (idx < cnt % sizeof(uint4)) {
+        d1[cnt - idx - 1] = s1[cnt - idx - 1];
+    }
+}
+
+ucc_status_t ucc_ec_cuda_copy_multi2_kernel(void * const* dst,
+                                            void * const* src,
+                                            const size_t * counts,
+                                            int size, cudaStream_t stream)
+{
+    const int nt = 1024;
+    const int nb = size * 2;
+    int aligned = 1;
+
+    for (int i = 0; i < size; i++) {
+        if (align_pow2((intptr_t)src[i], 16) || align_pow2((intptr_t)dst[i], 16)) {
+            aligned = 0;
+        }
+    }
+
+    copy_info_t info;
+
+    info.src[0] = src[0];     info.dst[0] = dst[0];     info.cnt[0] = counts[0];
+    info.src[1] = src[1];     info.dst[1] = dst[1];     info.cnt[1] = counts[1];
+    info.src[2] = src[2];     info.dst[2] = dst[2];     info.cnt[2] = counts[2];
+    info.src[3] = src[3];     info.dst[3] = dst[3];     info.cnt[3] = counts[3];
+    info.src[4] = src[4];     info.dst[4] = dst[4];     info.cnt[4] = counts[4];
+    info.src[5] = src[5];     info.dst[5] = dst[5];     info.cnt[5] = counts[5];
+    info.size = size;
+
+    if (aligned) {
+        kernel_copy_multi2_aligned<<<nb, nt, 0, stream>>>(info);
+    } else {
+        kernel_copy_multi2<<<nb, nt, 0, stream>>>(info);
+    }
+    // switch(size) {
+    // case 1:
+    //     if (aligned) {
+    //         kernel_copy_aligned<<<nb, nt, 0, stream>>>(dst[0], src[0], counts[0]);
+    //     } else {
+    //         cudaMemcpyAsync(dst[0], src[0], counts[0], cudaMemcpyDefault, stream);
+    //     }
+    //     break;
+    // case 2:
+    //     if (aligned) {
+    //         kernel_copy_multi22_aligned<<<nb, nt, 0, stream>>>(dst[0], dst[1],
+    //                                                            src[0], src[1],
+    //                                                            counts[0], counts[1]);
+    //     } else {
+    //         kernel_copy_multi22<<<nb, nt, 0, stream>>>((char*)dst[0], (char*)dst[1],
+    //                                                    (char*)src[0], (char*)src[1],
+    //                                                    counts[0], counts[1]);
+    //     }
+    //     break;
+    // case 6:
+    //     if (aligned) {
+    //         kernel_copy_multi26_aligned<<<nb, nt, 0, stream>>>(dst[0], dst[1], dst[2], dst[3], dst[4], dst[5],
+    //                                                            src[0], src[1], src[2], src[3], src[4], src[5],
+    //                                                            counts[0]);
+    //     } else {
+    //         kernel_copy_multi26<<<nb, nt, 0, stream>>>((char*)dst[0], (char*)dst[1], (char*)dst[2], (char*)dst[3], (char*)dst[4], (char*)dst[5],
+    //                                                    (char*)src[0], (char*)src[1], (char*)src[2], (char*)src[3], (char*)src[4], (char*)src[5],
+    //                                                     counts[0]);
+    //     }
+    //     break;
+    // default:
+    //     printf("too many vectors for copy\n");
+    //     return UCC_ERR_NOT_SUPPORTED;
+    // }
+    CUDA_CHECK(cudaGetLastError());
+    return UCC_OK;
+}
+
 
 ucc_status_t ucc_ec_cuda_reduce_kernel(float *dst, float *src1, float *src2,
                                        size_t size, cudaStream_t stream)
