@@ -575,19 +575,19 @@ __global__ void kernel_copy_multi2_aligned(copy_info_t info)
     int       idx   = threadIdx.x + (blockIdx.x % blocks_per_buf) * blockDim.x;
     const int step  = blockDim.x * blocks_per_buf;
 
-    const int n = cnt / sizeof(uint4);
+    const int n = cnt / sizeof(float4);
     const int num_iter = n / step + ((idx < n % step) ? 1 : 0);
-    char1 *s1 = (char1*)src;
+    const char1 *s1 = (char1*)src;
     char1 *d1 = (char1*)dst;
-    uint4 *s4 = (uint4*)src;
-    uint4 *d4 = (uint4*)dst;
+    const float4 *s4 = (float4*)src;
+    float4 *d4 = (float4*)dst;
 
-#pragma unroll 4
-    for(int i = 0; i < num_iter; i++) {
+#pragma unroll
+    for(int i = 0; i < num_iter; i+=1) {
         d4[i * step + idx] = s4[i * step + idx];
     }
 
-    if (idx < cnt % sizeof(uint4)) {
+    if (idx < cnt % sizeof(float4)) {
         d1[cnt - idx - 1] = s1[cnt - idx - 1];
     }
 }
@@ -598,7 +598,7 @@ ucc_status_t ucc_ec_cuda_copy_multi2_kernel(void * const* dst,
                                             int size, cudaStream_t stream)
 {
     const int nt = 1024;
-    const int nb = size * 2;
+    const int nb = size;
     int aligned = 1;
     copy_info_t info;
 

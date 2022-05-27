@@ -202,6 +202,7 @@ struct ucc_tl_cuda_task {
             int                     stage;
             int                     num_frags;
             int                     num_rings;
+            int                     num_chunks;
             ucc_datatype_t          dt;
             void                   *sbuf;
             void                   *rbuf;
