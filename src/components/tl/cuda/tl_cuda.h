@@ -22,7 +22,7 @@
 #endif
 
 #define UCC_TL_CUDA_MAX_PEERS 8
-#define UCC_TL_CUDA_MAX_RINGS 8
+#define UCC_TL_CUDA_MAX_RINGS 12
 
 #define UCC_TL_CUDA_SUPPORTED_COLLS                                            \
     (UCC_COLL_TYPE_ALLTOALL | UCC_COLL_TYPE_ALLTOALLV |                        \

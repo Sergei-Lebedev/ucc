@@ -246,4 +246,28 @@ static inline size_t ucc_buffer_block_offset(size_t     total_count,
     return (block < left) ? offset - (left - block) : offset;
 }
 
+static inline size_t ucc_buffer_block_count_aligned(size_t total_count,
+                                                    ucc_rank_t n_blocks,
+                                                    ucc_rank_t block,
+                                                    int alignment)
+{
+    size_t block_count = ucc_align_up_pow2(ucc_max(total_count / n_blocks, 1),
+                                           alignment);
+    size_t offset      = block_count * block;
+
+    return (total_count < offset) ? 0: ucc_min(total_count - offset, block_count);
+}
+
+static inline size_t ucc_buffer_block_offset_aligned(size_t total_count,
+                                                     ucc_rank_t n_blocks,
+                                                     ucc_rank_t block,
+                                                     int alignment)
+{
+    size_t block_count = ucc_align_up_pow2(ucc_max(total_count / n_blocks, 1),
+                                           alignment);
+    size_t offset      = block_count * block;
+
+    return ucc_min(offset, total_count);
+}
+
 #endif

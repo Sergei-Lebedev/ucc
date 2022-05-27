@@ -539,9 +539,9 @@ ucc_status_t ucc_ec_cuda_copy_multi_kernel(void *dst1, void *dst2, void *src,
 }
 
 struct copy_info_t {
-    void   *src[6];
-    void   *dst[6];
-    size_t  cnt[6];
+    void   *src[UCC_EE_EXEUCOTR_NUM_COPY_BUFS];
+    void   *dst[UCC_EE_EXEUCOTR_NUM_COPY_BUFS];
+    int     cnt[UCC_EE_EXEUCOTR_NUM_COPY_BUFS];
     int     size;
 };
 
@@ -570,10 +570,10 @@ __global__ void kernel_copy_multi2_aligned(copy_info_t info)
     int buf_id = blockIdx.x / blocks_per_buf;
     char1 *src = (char1*)info.src[buf_id];
     char1 *dst = (char1*)info.dst[buf_id];
-    size_t cnt = info.cnt[buf_id];
+    int cnt = info.cnt[buf_id];
 
-    size_t       idx   = threadIdx.x + (blockIdx.x % blocks_per_buf) * blockDim.x;
-    const size_t step  = blockDim.x * blocks_per_buf;
+    int       idx   = threadIdx.x + (blockIdx.x % blocks_per_buf) * blockDim.x;
+    const int step  = blockDim.x * blocks_per_buf;
 
     const int n = cnt / sizeof(uint4);
     const int num_iter = n / step + ((idx < n % step) ? 1 : 0);
@@ -600,6 +600,7 @@ ucc_status_t ucc_ec_cuda_copy_multi2_kernel(void * const* dst,
     const int nt = 1024;
     const int nb = size * 2;
     int aligned = 1;
+    copy_info_t info;
 
     for (int i = 0; i < size; i++) {
         if (align_pow2((intptr_t)src[i], 16) || align_pow2((intptr_t)dst[i], 16)) {
@@ -607,14 +608,11 @@ ucc_status_t ucc_ec_cuda_copy_multi2_kernel(void * const* dst,
         }
     }
 
-    copy_info_t info;
-
-    info.src[0] = src[0];     info.dst[0] = dst[0];     info.cnt[0] = counts[0];
-    info.src[1] = src[1];     info.dst[1] = dst[1];     info.cnt[1] = counts[1];
-    info.src[2] = src[2];     info.dst[2] = dst[2];     info.cnt[2] = counts[2];
-    info.src[3] = src[3];     info.dst[3] = dst[3];     info.cnt[3] = counts[3];
-    info.src[4] = src[4];     info.dst[4] = dst[4];     info.cnt[4] = counts[4];
-    info.src[5] = src[5];     info.dst[5] = dst[5];     info.cnt[5] = counts[5];
+    for (int i = 0; i < size; i++) {
+        info.src[i] = src[i];
+        info.dst[i] = dst[i];
+        info.cnt[i] = counts[i];
+    }
     info.size = size;
 
     if (aligned) {
@@ -622,40 +620,6 @@ ucc_status_t ucc_ec_cuda_copy_multi2_kernel(void * const* dst,
     } else {
         kernel_copy_multi2<<<nb, nt, 0, stream>>>(info);
     }
-    // switch(size) {
-    // case 1:
-    //     if (aligned) {
-    //         kernel_copy_aligned<<<nb, nt, 0, stream>>>(dst[0], src[0], counts[0]);
-    //     } else {
-    //         cudaMemcpyAsync(dst[0], src[0], counts[0], cudaMemcpyDefault, stream);
-    //     }
-    //     break;
-    // case 2:
-    //     if (aligned) {
-    //         kernel_copy_multi22_aligned<<<nb, nt, 0, stream>>>(dst[0], dst[1],
-    //                                                            src[0], src[1],
-    //                                                            counts[0], counts[1]);
-    //     } else {
-    //         kernel_copy_multi22<<<nb, nt, 0, stream>>>((char*)dst[0], (char*)dst[1],
-    //                                                    (char*)src[0], (char*)src[1],
-    //                                                    counts[0], counts[1]);
-    //     }
-    //     break;
-    // case 6:
-    //     if (aligned) {
-    //         kernel_copy_multi26_aligned<<<nb, nt, 0, stream>>>(dst[0], dst[1], dst[2], dst[3], dst[4], dst[5],
-    //                                                            src[0], src[1], src[2], src[3], src[4], src[5],
-    //                                                            counts[0]);
-    //     } else {
-    //         kernel_copy_multi26<<<nb, nt, 0, stream>>>((char*)dst[0], (char*)dst[1], (char*)dst[2], (char*)dst[3], (char*)dst[4], (char*)dst[5],
-    //                                                    (char*)src[0], (char*)src[1], (char*)src[2], (char*)src[3], (char*)src[4], (char*)src[5],
-    //                                                     counts[0]);
-    //     }
-    //     break;
-    // default:
-    //     printf("too many vectors for copy\n");
-    //     return UCC_ERR_NOT_SUPPORTED;
-    // }
     CUDA_CHECK(cudaGetLastError());
     return UCC_OK;
 }

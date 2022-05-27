@@ -77,6 +77,7 @@ typedef struct ucc_ee_executor_params {
 } ucc_ee_executor_params_t;
 
 #define UCC_EE_EXECUTOR_NUM_BUFS 9
+#define UCC_EE_EXEUCOTR_NUM_COPY_BUFS 8
 /*
  *  buffers[0] - destination
  *  buffers[1] .. buffers[UCC_EE_EXECUTOR_NUM_BUFS - 1] - source
@@ -88,11 +89,11 @@ typedef struct ucc_ee_executor_params {
 typedef struct ucc_ee_executor_task_args {
     ucc_ee_executor_task_type_t  task_type;
     void                        *bufs[UCC_EE_EXECUTOR_NUM_BUFS];
-    void                        *src[UCC_EE_EXECUTOR_NUM_BUFS];
-    void                        *dst[UCC_EE_EXECUTOR_NUM_BUFS];
+    void                        *src[UCC_EE_EXEUCOTR_NUM_COPY_BUFS];
+    void                        *dst[UCC_EE_EXEUCOTR_NUM_COPY_BUFS];
     double                       alpha;
     ucc_count_t                  count;
-    size_t                       counts[UCC_EE_EXECUTOR_NUM_BUFS];
+    size_t                       counts[UCC_EE_EXEUCOTR_NUM_COPY_BUFS];
     size_t                       stride;
     uint32_t                     size;
     ucc_datatype_t               dt;
