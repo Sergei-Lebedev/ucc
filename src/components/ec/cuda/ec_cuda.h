@@ -90,7 +90,8 @@ typedef struct ucc_ec_cuda_stream_request {
 
 typedef struct ucc_ec_cuda_executor_interruptible_task {
     ucc_ee_executor_task_t  super;
-    void                   *event;
+    void                   *event[12];
+    int                     num_events;
 } ucc_ec_cuda_executor_interruptible_task_t;
 
 typedef struct ucc_ec_cuda_executor_task_ops {

@@ -598,7 +598,7 @@ ucc_status_t ucc_ec_cuda_copy_multi2_kernel(void * const* dst,
                                             int size, cudaStream_t stream)
 {
     const int nt = 1024;
-    const int nb = size;
+    const int nb = size * 1;
     int aligned = 1;
     copy_info_t info;
 
@@ -624,11 +624,9 @@ ucc_status_t ucc_ec_cuda_copy_multi2_kernel(void * const* dst,
     return UCC_OK;
 }
 
-
 ucc_status_t ucc_ec_cuda_reduce_kernel(float *dst, float *src1, float *src2,
                                        size_t size, cudaStream_t stream)
 {
-
     const int nt = 1024;
     int aligned;
     // const int nb = (size + nt - 1)/nt;;

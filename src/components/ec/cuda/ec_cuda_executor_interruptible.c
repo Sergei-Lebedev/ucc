@@ -59,6 +59,52 @@ ucc_status_t ucc_ec_cuda_reduce_kernel(float *dst, float *src1, float *src2,
 
 #define align_pow2(_n, _p) ((_n) & ((_p) - 1))
 
+
+ucc_status_t
+ucc_cuda_executor_interruptible_post_copy(ucc_ee_executor_t *executor,
+                                          const ucc_ee_executor_task_args_t *task_args,
+                                          ucc_ec_cuda_executor_interruptible_task_t *ee_task)
+{
+    ucc_status_t status;
+    cudaStream_t streams[12];
+    int i;
+
+        // ee_task->num_events = 0;
+    for (i = 0; i < task_args->size; i++) {
+        status = ucc_cuda_executor_interruptible_get_stream(&streams[i]);
+        if (ucc_unlikely(status != UCC_OK)) {
+            return status;
+        }
+
+
+        status = CUDA_FUNC(cudaMemcpyAsync(task_args->dst[i],
+                                task_args->src[i],
+                                task_args->counts[i], cudaMemcpyDefault,
+                                streams[i]));
+        if (ucc_unlikely(status != UCC_OK)) {
+            ec_error(&ucc_ec_cuda.super, "failed to start copymulti2 op");
+            return status;
+        }
+
+    }
+
+    for (i = 0; i < task_args->size; i++) {
+        status  = ucc_ec_cuda_event_create(&ee_task->event[i]);
+        if (ucc_unlikely(status != UCC_OK)) {
+            ucc_mpool_put(ee_task);
+            return status;
+        }
+        status = ucc_ec_cuda_event_post(streams[i], ee_task->event[i]);
+        if (ucc_unlikely(status != UCC_OK)) {
+            return status;
+        }
+    }
+
+    ee_task->num_events = task_args->size;
+
+    return UCC_OK;
+}
+
 ucc_status_t
 ucc_cuda_executor_interruptible_task_post(ucc_ee_executor_t *executor,
                                          const ucc_ee_executor_task_args_t *task_args,
@@ -68,25 +114,31 @@ ucc_cuda_executor_interruptible_task_post(ucc_ee_executor_t *executor,
     ucc_status_t status;
     cudaStream_t stream;
     int aligned;
-    // int i;
-
-    status = ucc_cuda_executor_interruptible_get_stream(&stream);
-    if (ucc_unlikely(status != UCC_OK)) {
-        return status;
-    }
 
     ee_task = ucc_mpool_get(&ucc_ec_cuda.executor_interruptible_tasks);
     if (ucc_unlikely(!ee_task)) {
         return UCC_ERR_NO_MEMORY;
     }
 
-    status  = ucc_ec_cuda_event_create(&ee_task->event);
+    ee_task->super.status = UCC_INPROGRESS;
+    ee_task->super.eee    = executor;
+    // if (task_args->task_type == UCC_EE_EXECUTOR_TASK_TYPE_COPY_MULTI2) {
+    if (0) {
+        *task = &ee_task->super;
+        return ucc_cuda_executor_interruptible_post_copy(executor, task_args, ee_task);
+    }
+
+    status = ucc_cuda_executor_interruptible_get_stream(&stream);
+    if (ucc_unlikely(status != UCC_OK)) {
+        return status;
+    }
+
+    ee_task->num_events = 1;
+    status  = ucc_ec_cuda_event_create(&ee_task->event[0]);
     if (ucc_unlikely(status != UCC_OK)) {
         ucc_mpool_put(ee_task);
         return status;
     }
-    ee_task->super.status = UCC_INPROGRESS;
-    ee_task->super.eee    = executor;
     memcpy(&ee_task->super.args, task_args, sizeof(ucc_ee_executor_task_args_t));
     ec_debug(&ucc_ec_cuda.super, "executor post");
 
@@ -124,7 +176,13 @@ ucc_cuda_executor_interruptible_task_post(ucc_ee_executor_t *executor,
         }
         break;
     case UCC_EE_EXECUTOR_TASK_TYPE_COPY_MULTI2:
+        // ee_task->num_events = 0;
         // for (i = 0; i < task_args->size; i++) {
+
+        //     status = ucc_cuda_executor_interruptible_get_stream(&stream);
+        //     if (ucc_unlikely(status != UCC_OK)) {
+        //         return status;
+        //     }
         //     status = CUDA_FUNC(cudaMemcpyAsync(task_args->dst[i],
         //                             task_args->src[i],
         //                             task_args->counts[i], cudaMemcpyDefault,
@@ -134,7 +192,12 @@ ucc_cuda_executor_interruptible_task_post(ucc_ee_executor_t *executor,
         //         goto free_task;
         //     }
 
+        //     status = ucc_ec_cuda_event_post(stream, ee_task->event);
+        //     if (ucc_unlikely(status != UCC_OK)) {
+        //         goto free_task;
+        //     }
         // }
+
         status = ucc_ec_cuda_copy_multi2_kernel(task_args->dst, task_args->src,
                                                 task_args->counts, task_args->size,
                                                 stream);
@@ -192,7 +255,7 @@ ucc_cuda_executor_interruptible_task_post(ucc_ee_executor_t *executor,
         goto free_task;
     }
 
-    status = ucc_ec_cuda_event_post(stream, ee_task->event);
+    status = ucc_ec_cuda_event_post(stream, ee_task->event[0]);
     if (ucc_unlikely(status != UCC_OK)) {
         goto free_task;
     }
@@ -211,8 +274,21 @@ ucc_cuda_executor_interruptible_task_test(const ucc_ee_executor_task_t *task)
 {
     ucc_ec_cuda_executor_interruptible_task_t *ee_task =
         ucc_derived_of(task, ucc_ec_cuda_executor_interruptible_task_t);
+    int num_done = 0;
+    int i;
+    ucc_status_t status;
 
-    ee_task->super.status = ucc_ec_cuda_event_test(ee_task->event);
+    for (i = 0; i < ee_task->num_events; i++) {
+        status = ucc_ec_cuda_event_test(ee_task->event[i]);
+        if (status == UCC_OK) {
+            num_done++;
+        }
+    }
+
+    if (num_done == ee_task->num_events) {
+        ee_task->super.status = UCC_OK;
+    }
+
     return ee_task->super.status;
 }
 
@@ -221,9 +297,12 @@ ucc_cuda_executor_interruptible_task_finalize(ucc_ee_executor_task_t *task)
 {
     ucc_ec_cuda_executor_interruptible_task_t *ee_task =
         ucc_derived_of(task, ucc_ec_cuda_executor_interruptible_task_t);
-    ucc_status_t status;
+    ucc_status_t status = UCC_OK;
+    int i;
 
-    status = ucc_ec_cuda_event_destroy(ee_task->event);
+    for (i = 0; i < ee_task->num_events; i++) {
+        status = ucc_ec_cuda_event_destroy(ee_task->event[i]);
+    }
     ucc_mpool_put(task);
     return status;
 }

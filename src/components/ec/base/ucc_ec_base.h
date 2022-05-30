@@ -77,7 +77,7 @@ typedef struct ucc_ee_executor_params {
 } ucc_ee_executor_params_t;
 
 #define UCC_EE_EXECUTOR_NUM_BUFS 9
-#define UCC_EE_EXEUCOTR_NUM_COPY_BUFS 8
+#define UCC_EE_EXEUCOTR_NUM_COPY_BUFS 12
 /*
  *  buffers[0] - destination
  *  buffers[1] .. buffers[UCC_EE_EXECUTOR_NUM_BUFS - 1] - source
