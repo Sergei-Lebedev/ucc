@@ -99,7 +99,7 @@ ucc_status_t ucc_cpu_executor_stop(ucc_ee_executor_t *executor) //NOLINT
 }
 
 ucc_status_t ucc_cpu_executor_task_post(ucc_ee_executor_t *executor,
-                                        const ucc_ee_executor_task_args_t *task_args,
+                                        ucc_ee_executor_task_args_t *task_args,
                                         ucc_ee_executor_task_t **task)
 {
     ucc_status_t            status = UCC_OK;

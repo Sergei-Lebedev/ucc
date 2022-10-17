@@ -105,7 +105,8 @@ gtest_SOURCES =                     \
 
 if HAVE_CUDA
 gtest_SOURCES += \
-	core/test_mc_cuda.cc
+	core/test_mc_cuda.cc \
+    core/test_ec_cuda.cc
 gtest_CPPFLAGS += \
 	$(CUDA_CPPFLAGS)
 gtest_LDFLAGS += \

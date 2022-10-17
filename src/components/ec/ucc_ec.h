@@ -46,11 +46,14 @@ ucc_status_t ucc_ee_executor_stop(ucc_ee_executor_t *executor);
 ucc_status_t ucc_ee_executor_finalize(ucc_ee_executor_t *executor);
 
 ucc_status_t ucc_ee_executor_task_post(ucc_ee_executor_t *executor,
-                                       const ucc_ee_executor_task_args_t *task_args,
+                                       ucc_ee_executor_task_args_t *task_args,
                                        ucc_ee_executor_task_t **task);
 
 ucc_status_t ucc_ee_executor_task_test(const ucc_ee_executor_task_t *task);
 
 ucc_status_t ucc_ee_executor_task_finalize(ucc_ee_executor_task_t *task);
+
+ucc_status_t ucc_ee_get_compress_size(ucc_ee_type_t ee_type, size_t count_in,
+                                      ucc_datatype_t dt, size_t *count_out);
 
 #endif

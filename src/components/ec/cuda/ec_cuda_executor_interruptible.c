@@ -47,10 +47,16 @@ unlock:
 ucc_status_t ucc_ec_cuda_copy_multi_kernel(const ucc_ee_executor_task_args_t *args,
                                            cudaStream_t stream);
 
+ucc_status_t ucc_ec_cuda_compress(ucc_eee_task_compress_t *task,
+                                  cudaStream_t stream);
+
+ucc_status_t ucc_ec_cuda_decompress(ucc_eee_task_compress_t *task,
+                                    cudaStream_t stream);
+
 ucc_status_t
 ucc_cuda_executor_interruptible_task_post(ucc_ee_executor_t *executor,
-                                         const ucc_ee_executor_task_args_t *task_args,
-                                         ucc_ee_executor_task_t **task)
+                                          ucc_ee_executor_task_args_t *task_args,
+                                          ucc_ee_executor_task_t **task)
 {
     cudaStream_t stream = NULL;
     ucc_ec_cuda_executor_interruptible_task_t *ee_task;
@@ -96,6 +102,17 @@ ucc_cuda_executor_interruptible_task_post(ucc_ee_executor_t *executor,
     case UCC_EE_EXECUTOR_TASK_REDUCE_MULTI_DST:
         status = ucc_ec_cuda_reduce((ucc_ee_executor_task_args_t *)task_args,
                                     stream);
+        if (ucc_unlikely(status != UCC_OK)) {
+            ec_error(&ucc_ec_cuda.super, "failed to start reduce op");
+            goto free_task;
+        }
+        break;
+    case UCC_EE_EXECUTOR_TASK_COMPRESS:
+        if (task_args->compress.flags & UCC_EE_TASK_COMPRESS_FLAG_DECOMPRESS) {
+            status = ucc_ec_cuda_decompress(&task_args->compress, stream);
+        } else {
+            status = ucc_ec_cuda_compress(&task_args->compress, stream);
+        }
         if (ucc_unlikely(status != UCC_OK)) {
             ec_error(&ucc_ec_cuda.super, "failed to start reduce op");
             goto free_task;

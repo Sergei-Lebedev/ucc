@@ -22,5 +22,9 @@ libucc_ec_cuda_la_LIBADD   = $(CUDA_LIBS)                      \
                              $(UCC_TOP_BUILDDIR)/src/libucc.la \
                              kernel/libucc_ec_cuda_kernels.la
 
+if HAVE_DIETGPU
+libucc_ec_cuda_la_LDFLAGS  += $(DIETGPU_LDFLAGS)
+endif
+
 include $(top_srcdir)/config/module.am
 endif

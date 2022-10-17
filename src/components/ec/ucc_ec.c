@@ -196,7 +196,7 @@ ucc_status_t ucc_ee_executor_finalize(ucc_ee_executor_t *executor)
 }
 
 ucc_status_t ucc_ee_executor_task_post(ucc_ee_executor_t *executor,
-                                       const ucc_ee_executor_task_args_t *task_args,
+                                       ucc_ee_executor_task_args_t *task_args,
                                        ucc_ee_executor_task_t **task)
 {
     UCC_CHECK_EC_AVAILABLE(executor->ee_type);
@@ -213,4 +213,14 @@ ucc_status_t ucc_ee_executor_task_finalize(ucc_ee_executor_task_t *task)
 {
     UCC_CHECK_EC_AVAILABLE(task->eee->ee_type);
     return executor_ops[task->eee->ee_type]->task_finalize(task);
+}
+
+ucc_status_t ucc_ee_get_compress_size(ucc_ee_type_t ee_type, size_t count_in,
+                                      ucc_datatype_t dt, size_t *count_out)
+{
+    ucc_ec_base_t *ec;
+    UCC_CHECK_EC_AVAILABLE(ee_type);
+
+    ec = ucc_container_of(ec_ops[ee_type], ucc_ec_base_t, ops);
+    return ec->get_compress_size(count_in, dt, count_out);
 }

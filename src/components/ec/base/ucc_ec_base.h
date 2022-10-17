@@ -11,6 +11,7 @@
 #include "utils/ucc_component.h"
 #include "utils/ucc_class.h"
 #include "utils/ucc_parser.h"
+#include "components/mc/ucc_mc.h"
 
 typedef struct ucc_ec_config {
     ucc_log_component_config_t log_component;
@@ -67,7 +68,8 @@ typedef enum ucc_ee_executor_task_type {
     UCC_EE_EXECUTOR_TASK_REDUCE_STRIDED   = UCC_BIT(1),
     UCC_EE_EXECUTOR_TASK_REDUCE_MULTI_DST = UCC_BIT(2),
     UCC_EE_EXECUTOR_TASK_COPY             = UCC_BIT(3),
-    UCC_EE_EXECUTOR_TASK_COPY_MULTI       = UCC_BIT(4)
+    UCC_EE_EXECUTOR_TASK_COPY_MULTI       = UCC_BIT(4),
+    UCC_EE_EXECUTOR_TASK_COMPRESS         = UCC_BIT(5)
 } ucc_ee_executor_task_type_t;
 
 typedef struct ucc_ee_executor_params {
@@ -147,6 +149,25 @@ typedef struct ucc_eee_task_copy {
     size_t len;
 } ucc_eee_task_copy_t;
 
+typedef enum {
+    /* if set do decompress and compress otherwise */
+    UCC_EE_TASK_COMPRESS_FLAG_DECOMPRESS     = UCC_BIT(0),
+    UCC_EE_TASK_COMPRESS_FLAG_COUNT64        = UCC_BIT(1),
+    UCC_EE_TASK_COMPRESS_FLAG_DISPLACEMENT64 = UCC_BIT(2)
+} ucc_ee_task_compress_flag_t;
+
+typedef struct ucc_eee_task_compress {
+    uint64_t        flags;
+    void           *src;
+    ucc_count_t    *src_counts;
+    ucc_aint_t     *src_displacements;
+    void           *dst;
+    ucc_count_t    *dst_counts;
+    ucc_count_t    *dst_displacements;
+    ucc_datatype_t  dt;
+    int             size;
+} ucc_eee_task_compress_t;
+
 enum ucc_eee_task_flags {
     UCC_EEE_TASK_FLAG_REDUCE_WITH_ALPHA = UCC_BIT(0),
     UCC_EEE_TASK_FLAG_REDUCE_SRCS_EXT   = UCC_BIT(1)
@@ -169,6 +190,7 @@ typedef struct ucc_ee_executor_task_args {
         ucc_eee_task_reduce_multi_dst_t reduce_multi_dst;
         ucc_eee_task_copy_t             copy;
         ucc_eee_task_copy_multi_t       copy_multi;
+        ucc_eee_task_compress_t         compress;
     };
 } ucc_ee_executor_task_args_t;
 
@@ -187,7 +209,7 @@ typedef struct ucc_ee_executor_ops {
     ucc_status_t (*stop)(ucc_ee_executor_t *executor);
     ucc_status_t (*finalize)(ucc_ee_executor_t *executor);
     ucc_status_t (*task_post)(ucc_ee_executor_t *executor,
-                              const ucc_ee_executor_task_args_t *task_args,
+                              ucc_ee_executor_task_args_t *task_args,
                               ucc_ee_executor_task_t **task);
     ucc_status_t (*task_test)(const ucc_ee_executor_task_t *task);
     ucc_status_t (*task_finalize)(ucc_ee_executor_task_t *task);
@@ -201,6 +223,9 @@ typedef struct ucc_ec_base {
     ucc_config_global_list_entry_t  config_table;
     ucc_status_t                   (*init)(const ucc_ec_params_t *ec_params);
     ucc_status_t                   (*get_attr)(ucc_ec_attr_t *ec_attr);
+    ucc_status_t                   (*get_compress_size)(size_t count_in,
+                                                        ucc_datatype_t dt,
+                                                        size_t *count_out);
     ucc_status_t                   (*finalize)();
     ucc_ec_ops_t                    ops;
     ucc_ee_executor_ops_t           executor_ops;

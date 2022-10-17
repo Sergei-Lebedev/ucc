@@ -11,6 +11,11 @@
 #include <cuda_runtime.h>
 #include <cuda.h>
 
+
+
+
+
+
 static const char *stream_task_modes[] = {
     [UCC_EC_CUDA_TASK_KERNEL]  = "kernel",
     [UCC_EC_CUDA_TASK_MEM_OPS] = "driver",
@@ -510,6 +515,9 @@ static ucc_status_t ucc_ec_cuda_finalize()
     return UCC_OK;
 }
 
+ucc_status_t ucc_ec_cuda_get_compress_size(size_t count_in,
+                                           ucc_datatype_t dt,
+                                           size_t *count_out);
 ucc_ec_cuda_t ucc_ec_cuda = {
     .super.super.name                 = "cuda ec",
     .super.ref_cnt                    = 0,
@@ -539,6 +547,7 @@ ucc_ec_cuda_t ucc_ec_cuda = {
     .super.executor_ops.task_test     = ucc_cuda_executor_task_test,
     .super.executor_ops.task_finalize = ucc_cuda_executor_task_finalize,
     .super.executor_ops.finalize      = ucc_cuda_executor_finalize,
+    .super.get_compress_size          = ucc_ec_cuda_get_compress_size,
 };
 
 UCC_CONFIG_REGISTER_TABLE_ENTRY(&ucc_ec_cuda.super.config_table,

@@ -98,7 +98,7 @@ typedef struct ucc_ec_cuda_executor_interruptible_task {
 
 typedef struct ucc_ec_cuda_executor_task_ops {
     ucc_status_t (*task_post)(ucc_ee_executor_t *executor,
-                              const ucc_ee_executor_task_args_t *task_args,
+                              ucc_ee_executor_task_args_t *task_args,
                               ucc_ee_executor_task_t **task);
     ucc_status_t (*task_test)(const ucc_ee_executor_task_t *task);
     ucc_status_t (*task_finalize)(ucc_ee_executor_task_t *task);

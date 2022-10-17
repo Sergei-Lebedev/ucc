@@ -9,6 +9,7 @@ NVCCFLAGS =                                      \
     -I${UCC_TOP_BUILDDIR}                        \
     -I${UCC_TOP_SRCDIR}/src                      \
     -I${UCC_TOP_BUILDDIR}/src                    \
+    ${DIETGPU_CPPFLAGS}                          \
     --compiler-options -fno-rtti,-fno-exceptions
 
 LINK = $(LIBTOOL) --mode=link $(CC) -o $@
@@ -23,7 +24,9 @@ comp_noinst = libucc_ec_cuda_kernels.la
 
 libucc_ec_cuda_kernels_la_SOURCES  = ec_cuda_wait_kernel.cu  \
                                      ec_cuda_executor.cu     \
-                                     ec_cuda_reduce.cu
+                                     ec_cuda_reduce.cu       \
+                                     ec_cuda_compress.cu
 libucc_ec_cuda_kernels_la_CPPFLAGS =
+libucc_ec_cuda_kernels_la_LIBADD =
 
 noinst_LTLIBRARIES = $(comp_noinst)

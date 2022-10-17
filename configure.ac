@@ -156,6 +156,7 @@ AS_IF([test "x$with_docs_only" = xyes],
      AM_CONDITIONAL([HAVE_PROFILING],[false])
      AM_CONDITIONAL([HAVE_IBVERBS],[false])
      AM_CONDITIONAL([HAVE_MLX5DV],[false])
+     AM_CONDITIONAL([HAVE_DIETGPU], [false])
     ],
     [
      AM_CONDITIONAL([DOCS_ONLY], [false])
@@ -173,6 +174,7 @@ AS_IF([test "x$with_docs_only" = xyes],
      m4_include([config/m4/configure.m4])
      m4_include([config/m4/tl_coll_plugins.m4])
      m4_include([config/m4/check_tls.m4])
+     m4_include([config/m4/dietgpu.m4])
 
      mc_modules=":cpu"
      tl_modules=""
@@ -188,6 +190,10 @@ AS_IF([test "x$with_docs_only" = xyes],
      CHECK_CUDA
      AC_MSG_RESULT([CUDA support: $cuda_happy; $CUDA_CPPFLAGS $CUDA_LDFLAGS])
      if test $cuda_happy = "yes"; then
+         CHECK_DIETGPU
+         if test $dietgpu_happy = "yes"; then
+            AC_MSG_RESULT("enable dietgpu")
+         fi
          mc_modules="${mc_modules}:cuda"
      fi
 
