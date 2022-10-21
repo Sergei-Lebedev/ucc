@@ -11,11 +11,6 @@
 #include <cuda_runtime.h>
 #include <cuda.h>
 
-
-
-
-
-
 static const char *stream_task_modes[] = {
     [UCC_EC_CUDA_TASK_KERNEL]  = "kernel",
     [UCC_EC_CUDA_TASK_MEM_OPS] = "driver",
@@ -139,6 +134,17 @@ static ucc_mpool_ops_t ucc_ec_cuda_ee_executor_mpool_ops = {
     .chunk_release = ucc_ec_cuda_ee_executor_mpool_chunk_free,
     .obj_init      = ucc_ec_cuda_executor_chunk_init,
     .obj_cleanup   = ucc_ec_cuda_executor_chunk_cleanup,
+};
+
+void ucc_ec_cuda_compress_resources_chunk_init(ucc_mpool_t *mp, void *obj, void *chunk);
+
+void ucc_ec_cuda_compress_resources_chunk_cleanup(ucc_mpool_t *mp, void *obj);
+
+static ucc_mpool_ops_t ucc_ec_cuda_compress_resources_mpool_ops = {
+    .chunk_alloc   = ucc_mpool_hugetlb_malloc,
+    .chunk_release = ucc_mpool_hugetlb_free,
+    .obj_init      = ucc_ec_cuda_compress_resources_chunk_init,
+    .obj_cleanup   = ucc_ec_cuda_compress_resources_chunk_cleanup,
 };
 
 static ucc_status_t ucc_ec_cuda_stream_req_mpool_chunk_malloc(ucc_mpool_t *mp,
@@ -297,6 +303,16 @@ static ucc_status_t ucc_ec_cuda_init(const ucc_ec_params_t *ec_params)
         sizeof(ucc_ec_cuda_executor_interruptible_task_t), 0, UCC_CACHE_LINE_SIZE,
         16, UINT_MAX, NULL, UCC_THREAD_MULTIPLE,
         "interruptible executor tasks");
+
+    status = ucc_mpool_init(
+        &ucc_ec_cuda.compress_resources, 0,
+        sizeof(ucc_ec_cuda_executor_compress_resources_t), 0, UCC_CACHE_LINE_SIZE,
+        4, UINT_MAX, &ucc_ec_cuda_compress_resources_mpool_ops, UCC_THREAD_MULTIPLE,
+        "compress task resources");
+    if (status != UCC_OK) {
+        ec_error(&ucc_ec_cuda.super, "failed to create compress resources pool");
+        return status;
+    }
 
     if (cfg->strm_task_mode == UCC_EC_CUDA_TASK_KERNEL) {
         ucc_ec_cuda.strm_task_mode = UCC_EC_CUDA_TASK_KERNEL;
@@ -510,6 +526,7 @@ static ucc_status_t ucc_ec_cuda_finalize()
     ucc_mpool_cleanup(&ucc_ec_cuda.strm_reqs, 1);
     ucc_mpool_cleanup(&ucc_ec_cuda.executors, 1);
     ucc_mpool_cleanup(&ucc_ec_cuda.executor_interruptible_tasks, 1);
+    ucc_mpool_cleanup(&ucc_ec_cuda.compress_resources, 1);
     ucc_free(ucc_ec_cuda.exec_streams);
 
     return UCC_OK;

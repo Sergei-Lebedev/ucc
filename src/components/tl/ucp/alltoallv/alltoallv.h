@@ -12,11 +12,14 @@
 
 enum {
     UCC_TL_UCP_ALLTOALLV_ALG_PAIRWISE,
+    UCC_TL_UCP_ALLTOALLV_ALG_PAIRWISE_COMPRESS,
     UCC_TL_UCP_ALLTOALLV_ALG_LAST
 };
 
 extern ucc_base_coll_alg_info_t
              ucc_tl_ucp_alltoallv_algs[UCC_TL_UCP_ALLTOALLV_ALG_LAST + 1];
+
+#define UCC_TL_UCP_ALLTOALLV_DEFAULT_ALG_SELECT_STR "alltoallv:0-inf:@0"
 
 ucc_status_t ucc_tl_ucp_alltoallv_init(ucc_tl_ucp_task_t *task);
 
@@ -25,6 +28,12 @@ ucc_status_t ucc_tl_ucp_alltoallv_pairwise_init(ucc_base_coll_args_t *coll_args,
                                                 ucc_coll_task_t     **task_h);
 
 ucc_status_t ucc_tl_ucp_alltoallv_pairwise_init_common(ucc_tl_ucp_task_t *task);
+
+ucc_status_t ucc_tl_ucp_alltoallv_pairwise_compress_init(ucc_base_coll_args_t *coll_args,
+                                                         ucc_base_team_t      *team,
+                                                         ucc_coll_task_t     **task_h);
+
+ucc_status_t ucc_tl_ucp_alltoallv_pairwise_compress_init_common(ucc_tl_ucp_task_t *task);
 
 #define ALLTOALLV_CHECK_INPLACE(_args, _team)               \
     do {                                                    \

@@ -48,9 +48,11 @@ ucc_status_t ucc_ec_cuda_copy_multi_kernel(const ucc_ee_executor_task_args_t *ar
                                            cudaStream_t stream);
 
 ucc_status_t ucc_ec_cuda_compress(ucc_eee_task_compress_t *task,
+                                  ucc_ec_cuda_executor_compress_resources_t *resources,
                                   cudaStream_t stream);
 
 ucc_status_t ucc_ec_cuda_decompress(ucc_eee_task_compress_t *task,
+                                    ucc_ec_cuda_executor_compress_resources_t *resources,
                                     cudaStream_t stream);
 
 ucc_status_t
@@ -79,6 +81,8 @@ ucc_cuda_executor_interruptible_task_post(ucc_ee_executor_t *executor,
     }
     ee_task->super.status = UCC_INPROGRESS;
     ee_task->super.eee    = executor;
+    ee_task->compress     = NULL;
+    ee_task->need_epilog  = 0;
     memcpy(&ee_task->super.args, task_args, sizeof(ucc_ee_executor_task_args_t));
     switch (task_args->task_type) {
     case UCC_EE_EXECUTOR_TASK_COPY:
@@ -108,13 +112,17 @@ ucc_cuda_executor_interruptible_task_post(ucc_ee_executor_t *executor,
         }
         break;
     case UCC_EE_EXECUTOR_TASK_COMPRESS:
+        ee_task->compress = ucc_mpool_get(&ucc_ec_cuda.compress_resources);
         if (task_args->compress.flags & UCC_EE_TASK_COMPRESS_FLAG_DECOMPRESS) {
-            status = ucc_ec_cuda_decompress(&task_args->compress, stream);
+            status = ucc_ec_cuda_decompress(&task_args->compress,
+                                            ee_task->compress, stream);
         } else {
-            status = ucc_ec_cuda_compress(&task_args->compress, stream);
+            status = ucc_ec_cuda_compress(&task_args->compress,
+                                          ee_task->compress, stream);
+            ee_task->need_epilog = 1;
         }
         if (ucc_unlikely(status != UCC_OK)) {
-            ec_error(&ucc_ec_cuda.super, "failed to start reduce op");
+            ec_error(&ucc_ec_cuda.super, "failed to start compress op");
             goto free_task;
         }
         break;
@@ -139,6 +147,9 @@ free_task:
     return status;
 }
 
+void ucc_ec_cuda_compress_epilog(ucc_eee_task_compress_t *task,
+                                 ucc_ec_cuda_executor_compress_resources_t *resources);
+
 ucc_status_t
 ucc_cuda_executor_interruptible_task_test(const ucc_ee_executor_task_t *task)
 {
@@ -146,8 +157,14 @@ ucc_cuda_executor_interruptible_task_test(const ucc_ee_executor_task_t *task)
         ucc_derived_of(task, ucc_ec_cuda_executor_interruptible_task_t);
 
     ee_task->super.status = ucc_ec_cuda_event_test(ee_task->event);
+    if (ee_task->super.status == UCC_OK && ee_task->need_epilog) {
+        ucc_ec_cuda_compress_epilog(&ee_task->super.args.compress,
+                                    ee_task->compress);
+        ee_task->need_epilog = 0;
+    }
     return ee_task->super.status;
 }
+
 
 ucc_status_t
 ucc_cuda_executor_interruptible_task_finalize(ucc_ee_executor_task_t *task)
@@ -157,6 +174,9 @@ ucc_cuda_executor_interruptible_task_finalize(ucc_ee_executor_task_t *task)
     ucc_status_t status;
 
     status = ucc_ec_cuda_event_destroy(ee_task->event);
+    if (ee_task->compress) {
+        ucc_mpool_put(ee_task->compress);
+    }
     ucc_mpool_put(task);
     return status;
 }

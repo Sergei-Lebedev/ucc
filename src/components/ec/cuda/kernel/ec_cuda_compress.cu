@@ -2,6 +2,7 @@
 extern "C" {
 #endif
 #include "../ec_cuda.h"
+#include "utils/ucc_malloc.h"
 #ifdef __cplusplus
 }
 #endif
@@ -16,7 +17,34 @@ extern "C" {
 
 namespace dg = dietgpu;
 
-#define MAX_NUM_BUFS 32
+#define MAX_NUM_BUFS 1024
+#define PROB_BITS 10
+
+void ucc_ec_cuda_compress_resources_chunk_init(ucc_mpool_t *mp, void *obj, void *chunk)
+{
+    int dev;
+    ucc_ec_cuda_executor_compress_resources_t *base = (ucc_ec_cuda_executor_compress_resources_t *) obj;
+
+    cudaGetDevice(&dev);
+    base->stack_memory = new dg::StackDeviceMemory(dev, 256 * 1024 * 1024);
+    CUDA_FUNC(cudaHostAlloc(&base->out_size_host, MAX_NUM_BUFS * sizeof(uint32_t),
+                            cudaHostAllocMapped));
+    CUDA_FUNC(cudaHostGetDevicePointer(&base->out_size_dev, base->out_size_host,
+                                       0));
+    base->srcs  = (void**)ucc_malloc(MAX_NUM_BUFS * sizeof(*base->srcs), "comp resources srcs");
+    base->dsts  = (void**)ucc_malloc(MAX_NUM_BUFS * sizeof(*base->dsts), "comp resources dsts");
+    base->count = (uint32_t*)ucc_malloc(MAX_NUM_BUFS * sizeof(*base->count), "comp resources count");
+}
+
+void ucc_ec_cuda_compress_resources_chunk_cleanup(ucc_mpool_t *mp, void *obj)
+{
+    ucc_ec_cuda_executor_compress_resources_t *base = (ucc_ec_cuda_executor_compress_resources_t *) obj;
+    delete static_cast<dg::StackDeviceMemory*>(base->stack_memory);
+    cudaFreeHost(base->out_size_host);
+    ucc_free(base->srcs);
+    ucc_free(base->dsts);
+    ucc_free(base->count);
+}
 
 static size_t get_count(uint64_t mask, const ucc_count_t *counts, int idx)
 {
@@ -45,18 +73,23 @@ static size_t get_displacement(uint64_t mask, const ucc_aint_t *displ, int idx)
         return ((uint32_t *)displ)[idx];
     }
 }
+void ucc_ec_cuda_compress_epilog(ucc_eee_task_compress_t *task,
+                                 ucc_ec_cuda_executor_compress_resources_t *resources)
+{
+    for (int i = 0; i < task->size; i++) {
+        set_count(task->flags, task->dst_counts, i, resources->out_size_host[i]);
+    }
+    return;
+}
 
 ucc_status_t ucc_ec_cuda_compress(ucc_eee_task_compress_t *task,
+                                  ucc_ec_cuda_executor_compress_resources_t *resources,
                                   cudaStream_t stream)
 {
-    const int prob_bits = 10;
-    auto temp_mem = dg::makeStackMemory();
-    uint32_t *out_size, *out_size_dev;
+    dg::StackDeviceMemory *temp_mem = (dg::StackDeviceMemory*)resources->stack_memory;
+    size_t                 dt_size  = ucc_dt_size(task->dt);
     dg::FloatCompressConfig comp_config;
     dg::FloatType dt;
-    size_t dt_size = ucc_dt_size(task->dt);
-    void *src[MAX_NUM_BUFS], *dst[MAX_NUM_BUFS];
-    uint32_t src_count[MAX_NUM_BUFS];
 
     if (!UCC_DT_IS_PREDEFINED(task->dt)) {
         ec_error(&ucc_ec_cuda.super, "user defined dt is not supported");
@@ -78,40 +111,28 @@ ucc_status_t ucc_ec_cuda_compress(ucc_eee_task_compress_t *task,
         return UCC_ERR_NOT_SUPPORTED;
     }
 
-    cudaHostAlloc(&out_size, task->size * sizeof(uint32_t), cudaHostAllocMapped);
-    cudaHostGetDevicePointer(&out_size_dev, out_size, 0);
-
     for (int i = 0; i < task->size; i++) {
-        src[i] = PTR_OFFSET(task->src, dt_size * get_displacement(task->flags, task->src_displacements, i));
-        dst[i] = PTR_OFFSET(task->dst, get_displacement(task->flags, task->dst_displacements, i));
-        src_count[i] = get_count(task->flags, task->src_counts, i);
+        resources->srcs[i]  = PTR_OFFSET(task->src, dt_size * get_displacement(task->flags, task->src_displacements, i));
+        resources->dsts[i]  = PTR_OFFSET(task->dst, get_displacement(task->flags, task->dst_displacements, i));
+        resources->count[i] = get_count(task->flags, task->src_counts, i);
     }
 
-    comp_config = dg::FloatCompressConfig(dt, prob_bits, false);
+    comp_config = dg::FloatCompressConfig(dt, PROB_BITS, false);
 
-    floatCompress(temp_mem, comp_config, task->size,
-                  (const void**)src, src_count,
-                  dst, out_size_dev, stream);
-    cudaStreamSynchronize(stream);
-
-    for(int i = 0; i < task->size; i++) {
-        set_count(task->flags, task->dst_counts, i, out_size[i]);
-    }
-    cudaFreeHost(out_size);
+    floatCompress(*temp_mem, comp_config, task->size,
+                  (const void**)resources->srcs, resources->count,
+                  resources->dsts, resources->out_size_dev, stream);
     return UCC_OK;
 }
 
 ucc_status_t ucc_ec_cuda_decompress(ucc_eee_task_compress_t *task,
+                                    ucc_ec_cuda_executor_compress_resources_t *resources,
                                     cudaStream_t stream)
 {
-    const int prob_bits = 10;
-    auto temp_mem = dg::makeStackMemory();
-    uint32_t *out_size, *out_size_dev;
+    dg::StackDeviceMemory *temp_mem = (dg::StackDeviceMemory*)resources->stack_memory;
+    size_t                 dt_size  = ucc_dt_size(task->dt);
     dg::FloatCompressConfig decomp_config;
     dg::FloatType dt;
-    size_t dt_size = ucc_dt_size(task->dt);
-    void *src[MAX_NUM_BUFS], *dst[MAX_NUM_BUFS];
-    uint32_t dst_count[MAX_NUM_BUFS];
 
     if (!UCC_DT_IS_PREDEFINED(task->dt)) {
         ec_error(&ucc_ec_cuda.super, "user defined dt is not supported");
@@ -133,22 +154,17 @@ ucc_status_t ucc_ec_cuda_decompress(ucc_eee_task_compress_t *task,
         return UCC_ERR_NOT_SUPPORTED;
     }
 
-    cudaHostAlloc(&out_size, task->size * sizeof(uint32_t), cudaHostAllocMapped);
-    cudaHostGetDevicePointer(&out_size_dev, out_size, 0);
-
     for (int i = 0; i < task->size; i++) {
-        src[i] = PTR_OFFSET(task->src, get_displacement(task->flags, task->src_displacements, i));
-        dst[i] = PTR_OFFSET(task->dst, dt_size * get_displacement(task->flags, task->dst_displacements, i));
-        dst_count[i] = get_count(task->flags, task->dst_counts, i);
+        resources->srcs[i]  = PTR_OFFSET(task->src, get_displacement(task->flags, task->src_displacements, i));
+        resources->dsts[i]  = PTR_OFFSET(task->dst, dt_size * get_displacement(task->flags, task->dst_displacements, i));
+        resources->count[i] = get_count(task->flags, task->dst_counts, i);
     }
 
-    decomp_config = dg::FloatDecompressConfig(dt, prob_bits, false);
+    decomp_config = dg::FloatDecompressConfig(dt, PROB_BITS, false);
 
-    floatDecompress(temp_mem, decomp_config, task->size, (const void**)src,
-                    dst, dst_count, nullptr, out_size_dev, stream);
-    cudaStreamSynchronize(stream);
-
-    cudaFreeHost(out_size);
+    floatDecompress(*temp_mem, decomp_config, task->size, (const void**)resources->srcs,
+                    resources->dsts, resources->count, nullptr,
+                    resources->out_size_dev, stream);
     return UCC_OK;
 }
 

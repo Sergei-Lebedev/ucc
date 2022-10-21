@@ -9,7 +9,7 @@
 #include "test_mpi.h"
 #include "mpi_util.h"
 
-#define TEST_DT UCC_DT_UINT32
+#define TEST_DT UCC_DT_FLOAT32
 
 template<typename T>
 void * TestAlltoallv::mpi_counts_to_ucc(int *mpi_counts, size_t _ncount)

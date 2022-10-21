@@ -15,7 +15,7 @@
 #include "components/ec/ucc_ec.h"
 #include "tl_ucp_tag.h"
 
-#define UCC_TL_UCP_N_DEFAULT_ALG_SELECT_STR 5
+#define UCC_TL_UCP_N_DEFAULT_ALG_SELECT_STR 6
 extern const char
     *ucc_tl_ucp_default_alg_select_str[UCC_TL_UCP_N_DEFAULT_ALG_SELECT_STR];
 
@@ -165,6 +165,17 @@ typedef struct ucc_tl_ucp_task {
             void *                  scratch;
             ucc_mc_buffer_header_t *scratch_mc_header;
         } gather_kn;
+        struct {
+            int                     stage;
+            ucc_mc_buffer_header_t *scratch_src;
+            ucc_mc_buffer_header_t *scratch_dst;
+            ucc_mc_buffer_header_t *scratch_offsets;
+            ucc_ee_executor_task_t *compress_task;
+            ucc_count_t            *comp_src_counts;
+            ucc_aint_t             *comp_src_displs;
+            ucc_count_t            *comp_dst_counts;
+            ucc_aint_t             *comp_dst_displs;
+        } alltoallv_compress;
     };
 } ucc_tl_ucp_task_t;
 

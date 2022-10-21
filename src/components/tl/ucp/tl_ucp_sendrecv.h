@@ -180,13 +180,23 @@ ucc_tl_ucp_recv_cb(void *buffer, size_t msglen, ucc_memory_type_t mtype,
                    ucc_tl_ucp_task_t *task, ucp_tag_recv_nbx_callback_t cb)
 {
     ucs_status_ptr_t ucp_status;
+    ucp_tag_recv_info_t info;
+    ucc_coll_args_t *args;
 
     ucp_status = ucc_tl_ucp_recv_common(buffer, msglen, mtype, dest_group_rank,
                                         team, task, cb);
     if (UCS_OK != ucp_status) {
         UCC_TL_UCP_CHECK_REQ_STATUS();
     } else {
-        cb(NULL, UCS_OK, NULL, (void*)task);
+        args = &TASK_ARGS(task);
+        info.length     = msglen;
+        info.sender_tag = UCC_TL_UCP_MAKE_SEND_TAG(
+            (args->mask & UCC_COLL_ARGS_FIELD_TAG),
+            task->tagged.tag, dest_group_rank,
+            team->super.super.params.id,
+            team->super.super.params.scope_id,
+            team->super.super.params.scope);
+        cb(NULL, UCS_OK, &info, (void*)task);
     }
     return UCC_OK;
 }

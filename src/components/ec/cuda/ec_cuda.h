@@ -74,6 +74,7 @@ typedef struct ucc_ec_cuda {
     ucc_mpool_t                    strm_reqs;
     ucc_mpool_t                    executors;
     ucc_mpool_t                    executor_interruptible_tasks;
+    ucc_mpool_t                    compress_resources;
     ucc_thread_mode_t              thread_mode;
     ucc_ec_cuda_strm_task_mode_t   strm_task_mode;
     ucc_ec_cuda_task_stream_type_t task_strm_type;
@@ -91,9 +92,20 @@ typedef struct ucc_ec_cuda_stream_request {
     cudaStream_t        stream;
 } ucc_ec_cuda_stream_request_t;
 
+typedef struct ucc_ec_cuda_executor_compress_resources {
+    void     **srcs;
+    void     **dsts;
+    void      *stack_memory;
+    uint32_t  *count;
+    uint32_t  *out_size_host;
+    uint32_t  *out_size_dev;
+} ucc_ec_cuda_executor_compress_resources_t;
+
 typedef struct ucc_ec_cuda_executor_interruptible_task {
-    ucc_ee_executor_task_t  super;
-    void                   *event;
+    ucc_ee_executor_task_t                     super;
+    void                                      *event;
+    ucc_ec_cuda_executor_compress_resources_t *compress;
+    int                                        need_epilog;
 } ucc_ec_cuda_executor_interruptible_task_t;
 
 typedef struct ucc_ec_cuda_executor_task_ops {

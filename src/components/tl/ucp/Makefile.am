@@ -19,10 +19,11 @@ alltoall =                       \
 	alltoall/alltoall_onesided.c \
 	alltoall/alltoall_pairwise.c
 
-alltoallv =                        \
-	alltoallv/alltoallv.h          \
-	alltoallv/alltoallv.c          \
-	alltoallv/alltoallv_pairwise.c
+alltoallv =                                 \
+	alltoallv/alltoallv.h                   \
+	alltoallv/alltoallv.c                   \
+	alltoallv/alltoallv_pairwise.c          \
+	alltoallv/alltoallv_pairwise_compress.c
 
 bcast =                   \
 	bcast/bcast.h         \

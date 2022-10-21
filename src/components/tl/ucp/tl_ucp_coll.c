@@ -28,7 +28,8 @@ const char
         UCC_TL_UCP_BCAST_DEFAULT_ALG_SELECT_STR,
         UCC_TL_UCP_ALLTOALL_DEFAULT_ALG_SELECT_STR,
         UCC_TL_UCP_REDUCE_SCATTER_DEFAULT_ALG_SELECT_STR,
-        UCC_TL_UCP_REDUCE_SCATTERV_DEFAULT_ALG_SELECT_STR};
+        UCC_TL_UCP_REDUCE_SCATTERV_DEFAULT_ALG_SELECT_STR,
+        UCC_TL_UCP_ALLTOALLV_DEFAULT_ALG_SELECT_STR};
 
 void ucc_tl_ucp_send_completion_cb(void *request, ucs_status_t status,
                                    void *user_data)
@@ -208,6 +209,19 @@ ucc_status_t ucc_tl_ucp_alg_id_to_init(int alg_id, const char *alg_id_str,
             break;
         case UCC_TL_UCP_ALLTOALL_ALG_ONESIDED:
             *init = ucc_tl_ucp_alltoall_onesided_init;
+            break;
+        default:
+            status = UCC_ERR_INVALID_PARAM;
+            break;
+        };
+        break;
+    case UCC_COLL_TYPE_ALLTOALLV:
+        switch (alg_id) {
+        case UCC_TL_UCP_ALLTOALLV_ALG_PAIRWISE:
+            *init = ucc_tl_ucp_alltoallv_pairwise_init;
+            break;
+        case UCC_TL_UCP_ALLTOALLV_ALG_PAIRWISE_COMPRESS:
+            *init = ucc_tl_ucp_alltoallv_pairwise_compress_init;
             break;
         default:
             status = UCC_ERR_INVALID_PARAM;
