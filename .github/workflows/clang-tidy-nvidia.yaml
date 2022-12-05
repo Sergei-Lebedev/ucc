@@ -38,7 +38,7 @@ jobs:
         cd /tmp
         wget ${HPCX_LINK}
         tar xjf hpcx-v2.13-gcc-MLNX_OFED_LINUX-5-ubuntu20.04-cuda11-gdrcopy2-nccl2.12-x86_64.tbz
-        mv hpcx-v2.13-gcc-MLNX_OFED_LINUX-5-ubuntu20.04-cuda11-gdrcopy2-nccl2.12-x86_64.tbz hpcx
+        mv hpcx-v2.13-gcc-MLNX_OFED_LINUX-5-ubuntu20.04-cuda11-gdrcopy2-nccl2.12-x86_64.tbz /tmp/hpcx
     - uses: actions/checkout@v1
     - name: Build UCC
       run: |
