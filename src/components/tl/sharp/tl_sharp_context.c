@@ -28,7 +28,7 @@ static int ucc_tl_sharp_oob_barrier(void *arg)
     status = oob_coll->allgather(&sbuf, rbuf, sizeof(char),
                                  oob_coll->coll_info, &req);
     if (UCC_OK == status) {
-        ucc_assert(req);
+        ucc_assert(req != NULL);
         while (UCC_OK != (status = oob_coll->req_test(req))) {
             if (status < 0) {
                 tl_error(ctx->super.super.lib, "failed to test oob req");
@@ -66,7 +66,7 @@ static int ucc_tl_sharp_oob_gather(void *arg, int root, void *sbuf,
 
     status = oob_coll->allgather(sbuf, rbuf, msg_size, oob_coll->coll_info, &req);
     if (UCC_OK == status) {
-        ucc_assert(req);
+        ucc_assert(req != NULL);
         while (UCC_OK != (status = oob_coll->req_test(req))) {
             if (status < 0) {
                 tl_error(ctx->super.super.lib, "failed to test oob req");
@@ -103,7 +103,7 @@ static int ucc_tl_sharp_oob_bcast(void *arg, void *buf, int size, int root)
     status = oob_coll->allgather(buf, tmp_rbuf, msg_size, oob_coll ->coll_info,
                                  &req);
     if (UCC_OK == status) {
-        ucc_assert(req);
+        ucc_assert(req != NULL);
         while (UCC_OK != (status = oob_coll ->req_test(req))) {
             if (status < 0) {
                 tl_error(ctx->super.super.lib, "failed to test oob req");
