@@ -111,6 +111,12 @@ typedef struct ucc_tl_ucp_worker {
     ucp_ep_h *        eps;
 } ucc_tl_ucp_worker_t;
 
+typedef struct ucc_tl_ucp_am_msg {
+    ucc_list_link_t            list_elem;
+    uint64_t                   tag;
+    void                      *msg;
+} ucc_tl_ucp_am_msg_t;
+
 typedef struct ucc_tl_ucp_context {
     ucc_tl_context_t            super;
     ucc_tl_ucp_context_config_t cfg;
@@ -118,11 +124,13 @@ typedef struct ucc_tl_ucp_context {
     ucc_tl_ucp_worker_t         service_worker;
     uint32_t                    service_worker_throttling_count;
     ucc_mpool_t                 req_mp;
+    ucc_mpool_t                 am_msg_mp;
     ucc_tl_ucp_remote_info_t *  remote_info;
     ucp_rkey_h *                rkeys;
     uint64_t                    n_rinfo_segs;
     uint64_t                    ucp_memory_types;
     int                         topo_required;
+    ucc_list_link_t             am_list;
 } ucc_tl_ucp_context_t;
 UCC_CLASS_DECLARE(ucc_tl_ucp_context_t, const ucc_base_context_params_t *,
                   const ucc_base_config_t *);

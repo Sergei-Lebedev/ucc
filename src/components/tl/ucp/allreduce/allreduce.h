@@ -10,6 +10,7 @@
 
 enum {
     UCC_TL_UCP_ALLREDUCE_ALG_KNOMIAL,
+    UCC_TL_UCP_ALLREDUCE_ALG_KNOMIAL_AM,
     UCC_TL_UCP_ALLREDUCE_ALG_SRA_KNOMIAL,
     UCC_TL_UCP_ALLREDUCE_ALG_LAST
 };
@@ -50,6 +51,10 @@ ucc_status_t ucc_tl_ucp_allreduce_knomial_finalize(ucc_coll_task_t *task);
 ucc_status_t ucc_tl_ucp_allreduce_sra_knomial_init(ucc_base_coll_args_t *coll_args,
                                                    ucc_base_team_t *     team,
                                                    ucc_coll_task_t **    task_h);
+
+ucc_status_t ucc_tl_ucp_allreduce_knomial_am_init(ucc_base_coll_args_t *coll_args,
+                                                  ucc_base_team_t *     team,
+                                                  ucc_coll_task_t **    task_h);
 
 ucc_status_t ucc_tl_ucp_allreduce_sra_knomial_start(ucc_coll_task_t *task);
 

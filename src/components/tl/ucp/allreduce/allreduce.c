@@ -15,6 +15,10 @@ ucc_base_coll_alg_info_t
              .name = "knomial",
              .desc =
                  "recursive knomial with arbitrary radix (optimized for latency)"},
+        [UCC_TL_UCP_ALLREDUCE_ALG_KNOMIAL_AM] =
+            {.id   = UCC_TL_UCP_ALLREDUCE_ALG_KNOMIAL_AM,
+             .name = "knomial_am",
+             .desc = ""},
         [UCC_TL_UCP_ALLREDUCE_ALG_SRA_KNOMIAL] =
             {.id   = UCC_TL_UCP_ALLREDUCE_ALG_SRA_KNOMIAL,
              .name = "sra_knomial",
@@ -39,6 +43,7 @@ ucc_status_t ucc_tl_ucp_allreduce_knomial_init(ucc_base_coll_args_t *coll_args,
     ucc_tl_ucp_team_t *tl_team = ucc_derived_of(team, ucc_tl_ucp_team_t);
     ucc_tl_ucp_task_t *task;
     ucc_status_t       status;
+
     ALLREDUCE_TASK_CHECK(coll_args->args, tl_team);
     task                 = ucc_tl_ucp_init_task(coll_args, team);
     *task_h              = &task->super;

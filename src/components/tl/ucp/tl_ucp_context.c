@@ -130,6 +130,37 @@ err_cfg_read:
     return ucc_status;
 }
 
+ucs_status_t ucc_tl_ucp_am_recv_handler(void *arg, const void *header,
+                                        size_t header_length,
+                                        void *data, size_t length,
+                                        const ucp_am_recv_param_t *param)
+{
+    ucc_tl_ucp_context_t *tl_ucp_ctx = (ucc_tl_ucp_context_t *)arg;
+    ucc_tl_ucp_am_msg_t *entry = ucc_mpool_get(&tl_ucp_ctx->am_msg_mp);
+    // ucc_tl_ucp_am_msg_t *entry = ucc_malloc(sizeof(ucc_tl_ucp_am_msg_t));
+    // ucc_tl_ucp_am_msg_t *entry = ucc_mpool_get(&tl_ucp_ctx->req_mp);
+
+    uint64_t *tag = (uint64_t*)header;
+
+    ucc_assert(header_length == 8);
+    if (!entry) {
+        ucc_error("failed to allocate %zd bytes for am entry",
+                  sizeof(*entry));
+        return UCS_ERR_NO_MEMORY;
+    }
+    entry->tag = *tag;
+    entry->msg = data;
+    ucc_list_add_tail(&tl_ucp_ctx->am_list, &entry->list_elem);
+    return UCS_INPROGRESS;
+}
+
+struct ucc_mpool_ops ucc_am_recv_mpool_ops = {
+    .chunk_alloc   = ucc_mpool_hugetlb_malloc,
+    .chunk_release = ucc_mpool_hugetlb_free,
+    .obj_init      = NULL,
+    .obj_cleanup   = NULL
+};
+
 UCC_CLASS_INIT_FUNC(ucc_tl_ucp_context_t,
                     const ucc_base_context_params_t *params,
                     const ucc_base_config_t *config)
@@ -239,6 +270,18 @@ UCC_CLASS_INIT_FUNC(ucc_tl_ucp_context_t,
         goto err_thread_mode;
     }
 
+    ucc_status = ucc_mpool_init(
+        &self->am_msg_mp, 0,
+        sizeof(ucc_tl_ucp_am_msg_t), 0,
+        UCC_CACHE_LINE_SIZE, 8, UINT_MAX, &ucc_am_recv_mpool_ops,
+        params->thread_mode, "tl_ucp_am_msg_mp");
+    if (UCC_OK != ucc_status) {
+        tl_error(self->super.super.lib,
+                 "failed to initialize tl_ucp_req mpool");
+        goto err_thread_mode;
+    }
+
+
     CHECK(UCC_OK != ucc_context_progress_register(
                         params->context,
                         (ucc_context_progress_fn_t)ucp_worker_progress,
@@ -273,6 +316,26 @@ UCC_CLASS_INIT_FUNC(ucc_tl_ucp_context_t,
     ucc_free(prefix);
     prefix = NULL;
 
+    ucp_am_handler_param_t am_handler_param;
+
+    am_handler_param.field_mask = UCP_AM_HANDLER_PARAM_FIELD_ID |
+                                  UCP_AM_HANDLER_PARAM_FIELD_FLAGS |
+                                  UCP_AM_HANDLER_PARAM_FIELD_CB |
+                                  UCP_AM_HANDLER_PARAM_FIELD_ARG;
+    am_handler_param.id = 1;
+    am_handler_param.flags = UCP_AM_FLAG_WHOLE_MSG |
+                             UCP_AM_FLAG_PERSISTENT_DATA;
+    am_handler_param.cb = ucc_tl_ucp_am_recv_handler;
+    am_handler_param.arg = self;
+
+    status = ucp_worker_set_am_recv_handler(ucp_worker, &am_handler_param);
+    if (status != UCS_OK) {
+        tl_error(self->super.super.lib,
+                 "failed to set am recv handler");
+        ucc_status = ucs_status_to_ucc_status(status);
+        goto err_thread_mode;
+    }
+    ucc_list_head_init(&self->am_list);
     tl_debug(self->super.super.lib, "initialized tl context: %p", self);
     return UCC_OK;
 
@@ -391,6 +454,7 @@ UCC_CLASS_CLEANUP_FUNC(ucc_tl_ucp_context_t)
             self);
     }
     ucc_mpool_cleanup(&self->req_mp, 1);
+    ucc_mpool_cleanup(&self->am_msg_mp, 1);
     ucc_tl_ucp_eps_cleanup(&self->worker, self);
     if (self->cfg.service_worker != 0) {
         ucc_tl_ucp_eps_cleanup(&self->service_worker, self);

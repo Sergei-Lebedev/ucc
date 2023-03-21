@@ -36,7 +36,8 @@ allreduce =                           \
 	allreduce/allreduce.h             \
 	allreduce/allreduce.c             \
 	allreduce/allreduce_knomial.c     \
-	allreduce/allreduce_sra_knomial.c
+	allreduce/allreduce_sra_knomial.c \
+    allreduce/allreduce_knomial_am.c
 
 barrier =                     \
 	barrier/barrier.h         \

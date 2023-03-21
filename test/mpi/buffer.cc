@@ -123,6 +123,7 @@ ucc_status_t compare_buffers_fp(T *b1, T *b2, size_t count) {
     T epsilon = (T)TEST_MPI_FP_EPSILON;
     for (size_t i = 0; i < count; i++) {
         if (!is_equal(b1[i], b2[i], epsilon)) {
+            printf("pid %d b1 %f b2 %f ind %d\n", getpid(), (float)b1[i], (float)b2[i], (int)i);
             return UCC_ERR_NO_MESSAGE;
         }
     }
