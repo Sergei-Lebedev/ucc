@@ -50,6 +50,7 @@ typedef struct ucc_knomial_pattern {
     size_t         count;         /* collective buffer size */
     ucc_rank_t     block_size;
     size_t         block_offset;
+    int            block_alignment;
 } ucc_knomial_pattern_t;
 
 /**

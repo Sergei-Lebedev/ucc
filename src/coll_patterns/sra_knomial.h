@@ -49,7 +49,8 @@ static inline size_t
 ucc_sra_kn_compute_seg_size(size_t block_count, ucc_kn_radix_t radix,
                             ucc_rank_t si)
 {
-    return ucc_buffer_block_count(block_count, radix, si);
+    return ucc_buffer_block_count_aligned(block_count, radix, si, 32);
+    // return ucc_buffer_block_count(block_count, radix, si);
 }
 
 /**
@@ -63,7 +64,8 @@ static inline size_t
 ucc_sra_kn_compute_seg_offset(size_t block_count, ucc_kn_radix_t radix,
                               ucc_rank_t si)
 {
-    return ucc_buffer_block_offset(block_count, radix, si);
+    return ucc_buffer_block_offset_aligned(block_count, radix, si, 32);
+    // return ucc_buffer_block_offset(block_count, radix, si);
 }
 
 static inline size_t
@@ -176,8 +178,8 @@ ucc_knx_block(ucc_rank_t rank, ucc_rank_t size, ucc_kn_radix_t radix,
     while (p.iteration < iter) {
         step_radix = ucc_kn_compute_step_radix(&p);
         my_si      = ucc_kn_compute_seg_index(rank, p.radix_pow, &p);
-        offset += ucc_buffer_block_offset(block_count, step_radix, my_si);
-        block_count = ucc_buffer_block_count(block_count, step_radix, my_si);
+        offset += ucc_sra_kn_compute_seg_offset(block_count, step_radix, my_si);
+        block_count = ucc_sra_kn_compute_seg_size(block_count, step_radix, my_si);
         ucc_knomial_pattern_next_iteration(&p);
     }
     *b_count  = block_count;
@@ -224,15 +226,15 @@ ucc_kn_ag_pattern_peer_seg(ucc_rank_t peer, ucc_knomial_pattern_t *p,
     case KN_PATTERN_ALLGATHERX:
         step_radix = ucc_kn_compute_step_radix(p);
         seg_index = ucc_kn_compute_seg_index(peer, p->radix_pow, p);
-        *seg_offset = ucc_buffer_block_offset(p->block_size_counts, step_radix,
+        *seg_offset = ucc_sra_kn_compute_seg_offset(p->block_size_counts, step_radix,
                                               seg_index) + p->block_offset;
-        *seg_count = ucc_buffer_block_count(p->block_size_counts, step_radix,
+        *seg_count = ucc_sra_kn_compute_seg_size(p->block_size_counts, step_radix,
                                             seg_index);
         return;
     case KN_PATTERN_ALLGATHER:
         ucc_kn_seg_desc_compute(p, &s, peer);
-        *seg_offset = ucc_buffer_block_offset(p->count, p->size, s.seg_start);
-        *seg_count = ucc_buffer_block_offset(p->count, p->size, s.seg_end) -
+        *seg_offset = ucc_sra_kn_compute_seg_offset(p->count, p->size, s.seg_start);
+        *seg_count = ucc_sra_kn_compute_seg_offset(p->count, p->size, s.seg_end) -
                      *seg_offset;
         return;
     case KN_PATTERN_ALLGATHERV:
