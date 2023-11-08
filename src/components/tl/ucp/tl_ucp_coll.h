@@ -222,6 +222,12 @@ typedef struct ucc_tl_ucp_task {
             ucc_rank_t              iteration;
             int                     phase;
         } alltoall_bruck;
+        struct {
+            ucc_ee_executor_task_t *etask;
+        } alltoall_pairwise;
+        struct {
+            ucc_ee_executor_task_t *etask;
+        } alltoallv_pairwise;
     };
 } ucc_tl_ucp_task_t;
 
