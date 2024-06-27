@@ -66,6 +66,7 @@ jobs:
     - name: Build IMB
       run: |
          cd /tmp/imb
+         git checkout gcc_w
          make CC=/tmp/ompi/install/bin/mpicc CXX=/tmp/ompi/install/bin/mpicxx CPPFLAGS="-DCHECK=1" -j IMB-MPI1
     - name: Run IMB-DCHECK
       run: >
