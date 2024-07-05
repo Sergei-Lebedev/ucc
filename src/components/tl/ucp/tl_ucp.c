@@ -153,6 +153,11 @@ ucc_config_field_t ucc_tl_ucp_lib_config_table[] = {
      ucc_offsetof(ucc_tl_ucp_lib_config_t, reduce_kn_radix),
      UCC_CONFIG_TYPE_UINT},
 
+    {"REDUCE_KN_PIPELINE", "auto",
+     "Pipelining settings for knomial tree reduce algorithm",
+     ucc_offsetof(ucc_tl_ucp_lib_config_t, reduce_kn_pipeline),
+     UCC_CONFIG_TYPE_PIPELINE_PARAMS},
+
     {"GATHER_KN_RADIX", "4", "Radix of the knomial tree reduce algorithm",
      ucc_offsetof(ucc_tl_ucp_lib_config_t, gather_kn_radix),
      UCC_CONFIG_TYPE_UINT},

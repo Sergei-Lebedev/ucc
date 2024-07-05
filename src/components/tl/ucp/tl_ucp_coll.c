@@ -343,7 +343,7 @@ ucc_status_t ucc_tl_ucp_alg_id_to_init(int alg_id, const char *alg_id_str,
     case UCC_COLL_TYPE_REDUCE:
         switch (alg_id) {
         case UCC_TL_UCP_REDUCE_ALG_KNOMIAL:
-            *init = ucc_tl_ucp_reduce_knomial_init;
+            *init = ucc_tl_ucp_reduce_knomial_pipelined_init;
             break;
         case UCC_TL_UCP_REDUCE_ALG_DBT:
             *init = ucc_tl_ucp_reduce_dbt_init;
