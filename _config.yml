@@ -1,1 +1,4 @@
-theme: jekyll-theme-slate
+theme: jekyll-theme-cayman
+title: UCC Documentation
+description: Unified Communication Collective Documentation
+show_downloads: true
