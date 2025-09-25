@@ -304,6 +304,7 @@ ucc_status_t ucc_tl_ucp_team_get_scores(ucc_base_team_t   *tl_team,
             goto err;
         }
     }
+
     ucc_tl_ucp_team_default_score_str_free(ucc_tl_ucp_default_alg_select_str);
     *score_p = score;
     return UCC_OK;
