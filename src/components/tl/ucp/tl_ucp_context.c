@@ -198,10 +198,11 @@ UCC_CLASS_INIT_FUNC(ucc_tl_ucp_context_t,
                   "failed to set net devices", err_cfg, self);
     }
 
-    ucp_params.field_mask =
-        UCP_PARAM_FIELD_FEATURES | UCP_PARAM_FIELD_TAG_SENDER_MASK | UCP_PARAM_FIELD_NAME;
-    ucp_params.features =
-        UCP_FEATURE_TAG | UCP_FEATURE_AM | UCP_FEATURE_RMA | UCP_FEATURE_AMO64;
+    ucp_params.field_mask = UCP_PARAM_FIELD_FEATURES |
+                            UCP_PARAM_FIELD_TAG_SENDER_MASK |
+                            UCP_PARAM_FIELD_NAME;
+    ucp_params.features = UCP_FEATURE_TAG | UCP_FEATURE_AM | UCP_FEATURE_RMA |
+                          UCP_FEATURE_AMO64 | UCP_FEATURE_DEVICE;
     if (self->cfg.exported_memory_handle) {
         ucp_params.features |= UCP_FEATURE_EXPORTED_MEMH;
     }

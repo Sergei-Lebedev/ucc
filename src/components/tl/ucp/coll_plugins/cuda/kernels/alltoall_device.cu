@@ -3,27 +3,25 @@
 extern "C" {
 #include "components/tl/ucp/tl_ucp.h"
 #include "components/tl/ucp/tl_ucp_coll.h"
+#include "components/tl/ucp/coll_plugins/cuda/ucp_cuda.h"
 }
 
-__global__ void alltoall_device(void *send_buf, void *recv_buf, size_t count)
+__global__ void alltoall_device(size_t count,
+                                ucp_device_mem_list_handle_h mem0,
+                                ucp_device_mem_list_handle_h mem1)
 {
     int tid = threadIdx.x;
     int bid = blockIdx.x;
     int nthreads = blockDim.x;
     int nblocks = gridDim.x;
-    // ucs_status_t status;
-
-
-    // status = ucp_device_put_single<UCS_DEVICE_LEVEL_THREAD>(params.mem_list,
-    //     params.single.mem_list_index,
-    //     params.single.address,
-    //     params.single.remote_address,
-    //     params.single.length, flags,
-    //     req_ptr);
-
+    int tsize = 2;
+    ucp_device_mem_list_handle_h mem_list_h[2] = {mem0, mem1};
 
     if (tid == 0) {
-        printf("alltoall_device: tid = %d, bid = %d, nthreads = %d, nblocks = %d\n send_buf = %p, recv_buf = %p, count = %d\n", tid, bid, nthreads, nblocks, send_buf, recv_buf, (int)count);
+        for (int i = 0; i < tsize; i++) {
+            ucp_device_put_single<UCS_DEVICE_LEVEL_THREAD>(
+                mem_list_h[i], 0, 0, 0, count, 0, 0, NULL);
+        }
     }
 }
 
@@ -31,9 +29,21 @@ __global__ void alltoall_device(void *send_buf, void *recv_buf, size_t count)
 extern "C" {
 #endif
 
-ucc_status_t tl_ucp_cuda_alltoall_pairwise(ucc_coll_args_t *args)
+ucc_status_t tl_ucp_cuda_alltoall_pairwise(ucc_tl_ucp_task_t *task)
 {
-    alltoall_device<<<1, 1>>>(args->src.info.buffer, args->dst.info.buffer, args->src.info.count);
+    ucc_coll_args_t *args = &task->super.bargs.args;
+    size_t count = args->src.info.count * ucc_dt_size(args->src.info.datatype);
+    alltoall_device_task_t *a2a_task_data = (alltoall_device_task_t *)(task->plugin_data);
+    cudaError_t cuda_error;
+
+    alltoall_device<<<1, 1>>>(count,
+                              a2a_task_data->mem_list_h[0],
+                              a2a_task_data->mem_list_h[1]);
+    cuda_error = cudaGetLastError();
+    if (cuda_error != cudaSuccess) {
+        tl_error(UCC_TASK_LIB(task), "cudaGetLastError() failed: %s", cudaGetErrorString(cuda_error));
+        return UCC_ERR_NO_MESSAGE;
+    }
     return UCC_OK;
 }
 
